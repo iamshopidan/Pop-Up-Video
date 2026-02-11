@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pop-Up Video - Real-time Shopify abbreviation detection for onboarding">
+    <meta name="theme-color" content="#008060">
+    <title>Pop-Up Video 🎬</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Main content area (left side - for Google Meet) -->
+        <main class="main-content">
+            <div class="welcome-screen">
+                <img src="logo.jpg" alt="Pop-Up Video" class="welcome-logo">
+                <h1 class="sr-only">Pop-Up Video</h1>
+                <p class="welcome-subtitle">Decode the conversation</p>
+                <p class="welcome-description">
+                    Keep this window open alongside your Google Meet call.<br>
+                    We'll detect and define unknown terms in real-time.
+                </p>
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <span class="feature-icon">🎤</span>
+                        <span>Live Audio Detection</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">📚</span>
+                        <span>500+ Tech Terms</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🟢</span>
+                        <span>Shopify Jargon</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">⚡</span>
+                        <span>Real-time Results</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar for detections -->
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <div class="header-top">
+                    <div class="app-title">
+                        <img src="logo.jpg" alt="Pop-Up Video" class="sidebar-logo">
+                    </div>
+                    <div class="user-greeting" id="userGreeting">
+                        <span class="greeting-text">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="status-bar">
+                    <div class="status-indicator" id="statusIndicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text" id="statusText">Initializing...</span>
+                    </div>
+                    <div class="transcript-preview" id="transcriptPreview"></div>
+                </div>
+
+                <div class="category-selector">
+                    <label class="category-label">Categories selected</label>
+                    <div class="category-chips" id="categoryChips">
+                        <!-- Categories will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" id="toggleBtn" disabled>
+                        <span class="btn-icon" id="toggleIcon">▶</span>
+                        <span id="toggleText">Start Listening</span>
+                    </button>
+                    <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
+                        <span class="btn-icon">📄</span>
+                    </button>
+                    <button class="btn btn-secondary" id="clearBtn" title="Clear history">
+                        <span class="btn-icon">🗑</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="detection-feed" id="detectionFeed">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-icon">👂</div>
+                    <p>No abbreviations detected yet</p>
+                    <p class="empty-hint">Start listening to detect technical terms from your call</p>
+                </div>
+            </div>
+
+            <footer class="sidebar-footer">
+                <p>Audio processed locally • <span id="detectionCount">0</span> terms detected</p>
+            </footer>
+        </aside>
+    </div>
+
+    <!-- Error modal for unsupported browsers -->
+    <div class="modal" id="errorModal" hidden>
+        <div class="modal-content">
+            <div class="modal-icon">⚠️</div>
+            <h3>Browser Not Supported</h3>
+            <p id="errorMessage">Your browser doesn't support the Web Speech API. Please use Chrome or Edge for the best experience.</p>
+            <button class="btn btn-primary" onclick="document.getElementById('errorModal').hidden = true">Got it</button>
+        </div>
+    </div>
+
+    <!-- Quick API for identity (only loads when deployed to Quick) -->
+    <script src="/client/quick.js" onerror="window.Quick = null;"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
