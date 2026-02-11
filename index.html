@@ -64,10 +64,29 @@
                     <div class="transcript-preview" id="transcriptPreview"></div>
                 </div>
 
-                <div class="category-selector">
+                <div class="mode-toggle-wrapper">
+                    <div class="mode-toggle" id="modeToggle">
+                        <button class="mode-option active" data-mode="jargon">
+                            <span class="mode-icon">📚</span> Jargon
+                        </button>
+                        <button class="mode-option" data-mode="context">
+                            <span class="mode-icon">✨</span> Live Context
+                        </button>
+                        <div class="mode-slider"></div>
+                    </div>
+                </div>
+
+                <div class="category-selector" id="categorySelector">
                     <label class="category-label">Categories selected</label>
                     <div class="category-chips" id="categoryChips">
                         <!-- Categories will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="context-indicator" id="contextIndicator" style="display: none;">
+                    <div class="context-indicator-inner">
+                        <span class="context-pulse-dot"></span>
+                        <span class="context-indicator-text">Analyzing conversation every ~10s</span>
                     </div>
                 </div>
 
@@ -90,6 +109,13 @@
                             <span>Test</span>
                         </button>
                     </div>
+                </div>
+
+                <div class="test-input-wrapper">
+                    <form id="testInputForm" class="test-input-form">
+                        <input type="text" id="testInput" class="test-input" placeholder="Type to simulate speech..." autocomplete="off">
+                        <button type="submit" class="btn btn-test" title="Send">↵</button>
+                    </form>
                 </div>
             </header>
 

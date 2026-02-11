@@ -325,6 +325,115 @@ body {
     opacity: 1;
 }
 
+/* Mode Toggle */
+.mode-toggle-wrapper {
+    margin-bottom: 1rem;
+}
+
+.mode-toggle {
+    display: flex;
+    position: relative;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: 24px;
+    padding: 3px;
+    gap: 0;
+}
+
+.mode-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.75rem;
+    border: none;
+    border-radius: 20px;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+    position: relative;
+    z-index: 1;
+    user-select: none;
+}
+
+.mode-option:hover {
+    color: var(--text-secondary);
+}
+
+.mode-option.active {
+    color: white;
+}
+
+.mode-slider {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+    height: calc(100% - 6px);
+    border-radius: 20px;
+    background: linear-gradient(135deg, var(--shopify-green) 0%, var(--shopify-green-dark) 100%);
+    transition: transform var(--transition-base);
+    z-index: 0;
+}
+
+.mode-toggle.context-active .mode-slider {
+    transform: translateX(100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+}
+
+.mode-icon {
+    font-size: 0.85rem;
+}
+
+/* Context Mode Indicator */
+.context-indicator {
+    margin-bottom: 1rem;
+}
+
+.context-indicator-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: #7c3aed;
+    font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+    .context-indicator-inner {
+        background: rgba(124, 58, 237, 0.15);
+        border-color: rgba(124, 58, 237, 0.3);
+        color: #a78bfa;
+    }
+}
+
+.context-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #7c3aed;
+    flex-shrink: 0;
+    animation: contextPulse 2s infinite;
+}
+
+@keyframes contextPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.context-indicator-text {
+    flex: 1;
+}
+
 /* Category Selector */
 .category-selector {
     margin-bottom: 1rem;
@@ -497,6 +606,56 @@ body {
 
 .btn-icon {
     font-size: 0.9rem;
+}
+
+/* Test Input */
+.test-input-wrapper {
+    margin-top: 0.75rem;
+}
+
+.test-input-form {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.test-input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.test-input::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.test-input:focus {
+    border-color: var(--shopify-green);
+}
+
+.btn-test {
+    padding: 0.5rem 0.7rem;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-test:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--shopify-green);
+    color: var(--shopify-green);
 }
 
 /* Detection Feed */
@@ -1006,6 +1165,111 @@ body {
 
 .test-modal-actions .btn-secondary {
     flex: none;
+}
+
+/* Context Cards (LLM responses) */
+.detection-card.context-card::before {
+    background: linear-gradient(180deg, #7c3aed 0%, #a78bfa 100%);
+}
+
+.detection-card.context-card .abbreviation {
+    color: #7c3aed;
+    font-size: 0.95rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .detection-card.context-card .abbreviation {
+        color: #a78bfa;
+    }
+}
+
+.detection-card.context-card:hover {
+    border-color: #7c3aed;
+}
+
+.detection-card.context-card .definition {
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
+.detection-card.context-card .context-topic {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    background: rgba(124, 58, 237, 0.1);
+    color: #7c3aed;
+    border-radius: 10px;
+    margin-bottom: 0.4rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .detection-card.context-card .context-topic {
+        background: rgba(124, 58, 237, 0.2);
+        color: #a78bfa;
+    }
+}
+
+.detection-card.context-card .streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: #7c3aed;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* Nothing Notable Card */
+.detection-card.nothing-notable {
+    opacity: 0.55;
+}
+
+.detection-card.nothing-notable::before {
+    background: var(--border-color);
+}
+
+.detection-card.nothing-notable .nothing-notable-text {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* Context Loading Card */
+.detection-card.context-loading {
+    opacity: 0.8;
+}
+
+.loading-dots {
+    display: flex;
+    gap: 6px;
+    padding: 0.25rem 0;
+}
+
+.loading-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #7c3aed;
+    animation: loadingBounce 1.2s infinite ease-in-out;
+}
+
+.loading-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes loadingBounce {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1.1); }
 }
 
 /* Responsive adjustments */
