@@ -778,12 +778,19 @@ const state = {
     userName: null,
     selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']), // Default: all selected
     // Live Context mode
-    mode: 'jargon', // 'jargon' or 'context'
+    mode: 'jargon', // 'jargon', 'context', or 'interview'
     transcriptBuffer: '',
     contextTimer: null,
     contextCallInProgress: false,
     surfacedTopics: new Set(), // Avoid repeating the same topics
-    openaiClient: null
+    openaiClient: null,
+    // Interview mode
+    interviewRole: '',
+    interviewFocus: 'general',
+    interviewTranscriptHistory: [], // Rolling window of recent transcript chunks
+    interviewSuggestedQuestions: new Set(), // Avoid repeating questions
+    interviewTimer: null,
+    interviewCallInProgress: false
 };
 
 // ============================================
@@ -825,7 +832,11 @@ const elements = {
     // Mode toggle & context elements
     modeToggle: document.getElementById('modeToggle'),
     categorySelector: document.getElementById('categorySelector'),
-    contextIndicator: document.getElementById('contextIndicator')
+    contextIndicator: document.getElementById('contextIndicator'),
+    // Interview mode elements
+    interviewSetup: document.getElementById('interviewSetup'),
+    interviewRole: document.getElementById('interviewRole'),
+    interviewFocus: document.getElementById('interviewFocus')
 };
 
 // ============================================
@@ -906,8 +917,20 @@ function loadSavedCategories() {
 function initModeToggle() {
     // Load saved mode
     const savedMode = localStorage.getItem('popupvideo_mode');
-    if (savedMode === 'context' || savedMode === 'jargon') {
+    if (['context', 'jargon', 'interview'].includes(savedMode)) {
         state.mode = savedMode;
+    }
+
+    // Load saved interview settings
+    const savedRole = localStorage.getItem('popupvideo_interview_role');
+    const savedFocus = localStorage.getItem('popupvideo_interview_focus');
+    if (savedRole) {
+        state.interviewRole = savedRole;
+        elements.interviewRole.value = savedRole;
+    }
+    if (savedFocus) {
+        state.interviewFocus = savedFocus;
+        elements.interviewFocus.value = savedFocus;
     }
 
     // Set initial UI state
@@ -923,6 +946,18 @@ function initModeToggle() {
             }
         });
     });
+
+    // Interview role input listener
+    elements.interviewRole.addEventListener('input', (e) => {
+        state.interviewRole = e.target.value;
+        localStorage.setItem('popupvideo_interview_role', e.target.value);
+    });
+
+    // Interview focus select listener
+    elements.interviewFocus.addEventListener('change', (e) => {
+        state.interviewFocus = e.target.value;
+        localStorage.setItem('popupvideo_interview_focus', e.target.value);
+    });
 }
 
 function switchMode(newMode) {
@@ -930,17 +965,23 @@ function switchMode(newMode) {
     state.mode = newMode;
     localStorage.setItem('popupvideo_mode', newMode);
 
-    // Stop context timer if leaving context mode
+    // Stop timers when leaving LLM modes
     if (oldMode === 'context') {
         stopContextTimer();
+    }
+    if (oldMode === 'interview') {
+        stopInterviewTimer();
     }
 
     // Clear transcript buffer on mode switch
     state.transcriptBuffer = '';
 
-    // Start context timer if entering context mode and already listening
+    // Start appropriate timer if entering an LLM mode and already listening
     if (newMode === 'context' && state.isListening) {
         startContextTimer();
+    }
+    if (newMode === 'interview' && state.isListening) {
+        startInterviewTimer();
     }
 
     applyModeUI(newMode);
@@ -953,17 +994,18 @@ function applyModeUI(mode) {
         opt.classList.toggle('active', opt.dataset.mode === mode);
     });
 
-    // Slide the pill
-    elements.modeToggle.classList.toggle('context-active', mode === 'context');
-
-    // Show/hide category selector vs context indicator
+    // Slide the pill — remove all mode classes, add the active one
+    elements.modeToggle.classList.remove('context-active', 'interview-active');
     if (mode === 'context') {
-        elements.categorySelector.style.display = 'none';
-        elements.contextIndicator.style.display = 'block';
-    } else {
-        elements.categorySelector.style.display = 'block';
-        elements.contextIndicator.style.display = 'none';
+        elements.modeToggle.classList.add('context-active');
+    } else if (mode === 'interview') {
+        elements.modeToggle.classList.add('interview-active');
     }
+
+    // Show/hide mode-specific panels
+    elements.categorySelector.style.display = mode === 'jargon' ? 'block' : 'none';
+    elements.contextIndicator.style.display = mode === 'context' ? 'block' : 'none';
+    elements.interviewSetup.style.display = mode === 'interview' ? 'block' : 'none';
 }
 
 // ============================================
@@ -1250,6 +1292,305 @@ function formatContextResponse(text) {
 }
 
 // ============================================
+// Interview Mode - LLM Integration
+// ============================================
+
+const INTERVIEW_INTERVAL_MS = 12000; // 12 seconds
+const INTERVIEW_HISTORY_MAX_CHUNKS = 6; // Keep last ~72s of conversation
+
+function startInterviewTimer() {
+    if (state.interviewTimer) return;
+    state.interviewTimer = setInterval(() => {
+        if (state.mode === 'interview' && state.isListening && !state.interviewCallInProgress) {
+            processInterviewBuffer();
+        }
+    }, INTERVIEW_INTERVAL_MS);
+    console.log('[Interview] Timer started');
+}
+
+function stopInterviewTimer() {
+    if (state.interviewTimer) {
+        clearInterval(state.interviewTimer);
+        state.interviewTimer = null;
+        console.log('[Interview] Timer stopped');
+    }
+}
+
+async function processInterviewBuffer() {
+    const buffer = state.transcriptBuffer.trim();
+    console.log(`[Interview] Buffer check — length: ${buffer.length}, min: ${MIN_BUFFER_LENGTH}`);
+    if (buffer.length < MIN_BUFFER_LENGTH) {
+        console.log('[Interview] Buffer too short, skipping');
+        return;
+    }
+
+    // Add to rolling history and clear current buffer
+    state.interviewTranscriptHistory.push(buffer);
+    if (state.interviewTranscriptHistory.length > INTERVIEW_HISTORY_MAX_CHUNKS) {
+        state.interviewTranscriptHistory.shift();
+    }
+    state.transcriptBuffer = '';
+    state.interviewCallInProgress = true;
+
+    const loader = showInterviewLoading();
+
+    try {
+        await callLLMForInterview();
+        console.log('[Interview] LLM call completed successfully');
+    } catch (err) {
+        console.error('[Interview] LLM call FAILED:', err);
+        showInterviewNothingCard();
+    } finally {
+        state.interviewCallInProgress = false;
+        removeContextLoading(loader); // Reuse the same removal animation
+    }
+}
+
+function showInterviewLoading() {
+    const loader = document.createElement('div');
+    loader.className = 'detection-card interview-card context-loading';
+    loader.id = 'interview-loader';
+    loader.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation">🎯 Analyzing responses...</span>
+        </div>
+        <div class="loading-dots">
+            <span></span><span></span><span></span>
+        </div>
+    `;
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(loader, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(loader);
+    }
+    return loader;
+}
+
+function showInterviewNothingCard() {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const card = document.createElement('div');
+    card.className = 'detection-card interview-card nothing-notable';
+    card.id = `detection-int-empty-${Date.now()}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation nothing-notable-text">🎯 Listening for follow-up opportunities...</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+    `;
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(card);
+    }
+}
+
+function buildInterviewSystemPrompt() {
+    const role = state.interviewRole.trim() || 'the open position';
+    const focus = state.interviewFocus;
+
+    const previousQuestions = state.interviewSuggestedQuestions.size > 0
+        ? `\n\nQuestions already suggested (do NOT repeat or closely rephrase these):\n${[...state.interviewSuggestedQuestions].map(q => `- ${q}`).join('\n')}`
+        : '';
+
+    let focusGuidance = '';
+    switch (focus) {
+        case 'behavioral':
+            focusGuidance = `Focus exclusively on behavioral questions. Use the STAR method (Situation, Task, Action, Result) to probe deeper. Ask about specific past experiences, how they handled challenges, examples of leadership or teamwork, and lessons learned from failures.`;
+            break;
+        case 'technical':
+            focusGuidance = `Focus on technical depth. When the candidate mentions technologies, tools, or approaches, suggest questions that probe their actual understanding — ask about trade-offs, debugging experiences, architecture decisions, and edge cases they've encountered.`;
+            break;
+        case 'culture':
+            focusGuidance = `Focus on culture fit and values alignment. Probe how they collaborate, handle disagreements, approach learning, deal with ambiguity, and what kind of work environment they thrive in. Ask about their motivations and what they value in a team.`;
+            break;
+        default:
+            focusGuidance = `Provide a balanced mix of behavioral, technical, and culture-fit follow-up questions based on what's most relevant to what the candidate just said.`;
+    }
+
+    return `You are an expert interview coach assisting an HR recruiter in real-time during a job interview for ${role}. Your job is to analyze what the candidate just said and suggest 2-3 smart follow-up questions the recruiter can ask next.
+
+${focusGuidance}
+
+Guidelines for generating questions:
+- Base every question on something the candidate ACTUALLY said — reference their specific words, claims, or experiences
+- If the candidate gave a vague or surface-level answer, suggest a probing question to get specifics
+- If the candidate mentioned an achievement, suggest a question that digs into their specific contribution
+- If the candidate mentioned a challenge, ask what they learned or what they'd do differently
+- If the candidate made a claim (e.g., "I'm great at X"), suggest a question that asks for a concrete example
+- Flag any potential red flags worth exploring (e.g., blaming others, inconsistencies, avoiding specifics)
+
+Format your response EXACTLY as follows:
+
+**Q: [The suggested follow-up question]**
+Why: [One brief sentence explaining why this question is valuable — what it reveals]
+
+**Q: [Second question]**
+Why: [Brief rationale]
+
+If the conversation snippet doesn't contain enough substance for meaningful follow-ups (e.g., just small talk or greetings), respond with exactly: NOTHING_NOTABLE
+
+Important:
+- Maximum 3 questions per response
+- Questions should be conversational, not interrogative — the recruiter needs to ask them naturally
+- Each question should target something different (don't ask variations of the same thing)
+- Keep "Why" explanations to one sentence${previousQuestions}`;
+}
+
+async function callLLMForInterview() {
+    if (!state.openaiClient) {
+        console.error('[Interview] OpenAI client not initialized!');
+        throw new Error('OpenAI client not ready');
+    }
+
+    const fullTranscript = state.interviewTranscriptHistory.join(' ');
+    const recentChunk = state.interviewTranscriptHistory[state.interviewTranscriptHistory.length - 1] || '';
+
+    console.log(`[Interview] Sending to LLM — history: ${fullTranscript.length} chars, latest: ${recentChunk.length} chars`);
+
+    const systemPrompt = buildInterviewSystemPrompt();
+
+    const userContent = state.interviewTranscriptHistory.length > 1
+        ? `Here's the broader conversation context:\n\n"${fullTranscript}"\n\nThe most recent part of the conversation was:\n\n"${recentChunk}"\n\nSuggest follow-up questions based primarily on what was just said, with awareness of the broader context.`
+        : `Here's what the candidate just said in the interview:\n\n"${recentChunk}"\n\nSuggest follow-up questions.`;
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent }
+    ];
+
+    let stream;
+    try {
+        stream = await state.openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 600,
+            stream: true
+        });
+        console.log('[Interview] Stream created successfully');
+    } catch (err) {
+        console.error('[Interview] Failed to create stream:', err);
+        throw err;
+    }
+
+    let fullResponse = '';
+    let cardElement = null;
+    let definitionElement = null;
+    let chunkCount = 0;
+
+    try {
+        for await (const chunk of stream) {
+            chunkCount++;
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                fullResponse += content;
+
+                if (isNothingNotable(fullResponse)) {
+                    console.log('[Interview] Detected NOTHING_NOTABLE during streaming');
+                    if (cardElement) cardElement.remove();
+                    showInterviewNothingCard();
+                    return;
+                }
+
+                if (fullResponse.length < 15) continue;
+
+                if (!cardElement) {
+                    console.log('[Interview] Creating interview card');
+                    const result = createInterviewCard(fullResponse);
+                    cardElement = result.card;
+                    definitionElement = result.definition;
+                } else {
+                    definitionElement.innerHTML = formatInterviewResponse(fullResponse) + '<span class="streaming-cursor"></span>';
+                }
+            }
+        }
+    } catch (err) {
+        console.error(`[Interview] Stream reading failed after ${chunkCount} chunks:`, err);
+        throw err;
+    }
+
+    console.log(`[Interview] Stream complete — ${chunkCount} chunks, ${fullResponse.length} chars`);
+
+    if (isNothingNotable(fullResponse)) {
+        if (cardElement) cardElement.remove();
+        showInterviewNothingCard();
+    } else if (definitionElement) {
+        definitionElement.innerHTML = formatInterviewResponse(fullResponse);
+
+        // Track suggested questions to avoid repeats
+        const questionMatches = fullResponse.match(/\*\*Q:\s*(.+?)\*\*/g);
+        if (questionMatches) {
+            questionMatches.forEach(q => {
+                const cleaned = q.replace(/\*\*/g, '').replace(/^Q:\s*/, '').trim();
+                state.interviewSuggestedQuestions.add(cleaned);
+            });
+        }
+    } else if (fullResponse.trim().length > 0) {
+        const result = createInterviewCard(fullResponse);
+        result.definition.innerHTML = formatInterviewResponse(fullResponse);
+    } else {
+        showInterviewNothingCard();
+    }
+}
+
+function createInterviewCard(initialContent) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const focusLabels = { general: 'General', behavioral: 'Behavioral', technical: 'Technical', culture: 'Culture Fit' };
+    const focusLabel = focusLabels[state.interviewFocus] || 'General';
+
+    const card = document.createElement('div');
+    card.className = 'detection-card interview-card';
+    card.id = `detection-int-${Date.now()}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation">🎯 Suggested Questions</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <span class="interview-focus-tag">${focusLabel}</span>
+        <div class="definition">${formatInterviewResponse(initialContent)}<span class="streaming-cursor"></span></div>
+    `;
+
+    const definitionEl = card.querySelector('.definition');
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(card);
+    }
+
+    state.totalDetections++;
+    updateDetectionCount();
+
+    return { card, definition: definitionEl };
+}
+
+function formatInterviewResponse(text) {
+    let formatted = text;
+
+    // Convert **Q: question** to styled question blocks
+    formatted = formatted.replace(/\*\*Q:\s*(.+?)\*\*/g, '<span class="interview-question">$1</span>');
+
+    // Convert Why: rationale lines
+    formatted = formatted.replace(/^Why:\s*(.+)$/gm, '<span class="interview-rationale">$1</span>');
+
+    // Convert any remaining **bold**
+    formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Convert newlines to breaks
+    formatted = formatted.replace(/\n/g, '<br>');
+
+    return formatted;
+}
+
+// ============================================
 // Quick API Integration
 // ============================================
 
@@ -1317,6 +1658,10 @@ function handleRecognitionStart() {
     // Start context timer if in context mode
     if (state.mode === 'context') {
         startContextTimer();
+    }
+    // Start interview timer if in interview mode
+    if (state.mode === 'interview') {
+        startInterviewTimer();
     }
 }
 
@@ -1483,6 +1828,8 @@ function clearAllDetections() {
         state.recentDetections.clear();
         state.transcriptBuffer = '';
         state.surfacedTopics.clear();
+        state.interviewTranscriptHistory = [];
+        state.interviewSuggestedQuestions.clear();
         showEmptyState();
     }, cards.length * 50 + 300);
 }
@@ -1867,6 +2214,7 @@ async function startListening() {
 function stopListening() {
     state.isListening = false;
     stopContextTimer();
+    stopInterviewTimer();
     if (state.recognition) {
         state.recognition.stop();
     }
@@ -2153,10 +2501,14 @@ function init() {
         
         if (state.mode === 'jargon') {
             detectTerms(text);
-        } else {
+        } else if (state.mode === 'context') {
             // In context mode, add to buffer and immediately process
             state.transcriptBuffer += text + ' ';
             processTranscriptBuffer();
+        } else if (state.mode === 'interview') {
+            // In interview mode, add to buffer and immediately process
+            state.transcriptBuffer += text + ' ';
+            processInterviewBuffer();
         }
         
         testInput.value = '';

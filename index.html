@@ -65,12 +65,15 @@
                 </div>
 
                 <div class="mode-toggle-wrapper">
-                    <div class="mode-toggle" id="modeToggle">
+                    <div class="mode-toggle mode-toggle-3" id="modeToggle">
                         <button class="mode-option active" data-mode="jargon">
                             <span class="mode-icon">📚</span> Jargon
                         </button>
                         <button class="mode-option" data-mode="context">
-                            <span class="mode-icon">✨</span> Live Context
+                            <span class="mode-icon">✨</span> Context
+                        </button>
+                        <button class="mode-option" data-mode="interview">
+                            <span class="mode-icon">🎯</span> Interview
                         </button>
                         <div class="mode-slider"></div>
                     </div>
@@ -87,6 +90,24 @@
                     <div class="context-indicator-inner">
                         <span class="context-pulse-dot"></span>
                         <span class="context-indicator-text">Analyzing conversation every ~10s</span>
+                    </div>
+                </div>
+
+                <div class="interview-setup" id="interviewSetup" style="display: none;">
+                    <div class="interview-setup-inner">
+                        <label class="interview-label" for="interviewRole">Role being interviewed</label>
+                        <input type="text" id="interviewRole" class="interview-role-input" placeholder="e.g. Senior Frontend Developer" autocomplete="off">
+                        <label class="interview-label" for="interviewFocus">Interview focus</label>
+                        <select id="interviewFocus" class="interview-focus-select">
+                            <option value="general">General</option>
+                            <option value="behavioral">Behavioral</option>
+                            <option value="technical">Technical</option>
+                            <option value="culture">Culture Fit</option>
+                        </select>
+                    </div>
+                    <div class="interview-indicator-inner">
+                        <span class="interview-pulse-dot"></span>
+                        <span class="interview-indicator-text">Suggesting follow-up questions every ~12s</span>
                     </div>
                 </div>
 
