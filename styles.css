@@ -170,6 +170,211 @@ body {
     margin-bottom: 2.5rem;
 }
 
+/* Persona Selector Grid */
+.persona-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+    max-width: 580px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.persona-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 2rem 1.5rem;
+    background: var(--bg-card);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    font-family: inherit;
+    color: inherit;
+}
+
+.persona-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.persona-card.persona-shopify::before {
+    background: linear-gradient(90deg, var(--shopify-green) 0%, var(--shopify-green-light) 100%);
+}
+
+.persona-card.persona-recruiter::before {
+    background: linear-gradient(90deg, #d97706 0%, #fbbf24 100%);
+}
+
+.persona-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-color);
+}
+
+.persona-card:hover::before {
+    opacity: 1;
+}
+
+.persona-card.persona-shopify:hover {
+    border-color: var(--shopify-green);
+}
+
+.persona-card.persona-recruiter:hover {
+    border-color: #d97706;
+}
+
+.persona-card.selected {
+    border-width: 2px;
+}
+
+.persona-card.persona-shopify.selected {
+    border-color: var(--shopify-green);
+    box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.15);
+}
+
+.persona-card.persona-shopify.selected::before {
+    opacity: 1;
+}
+
+.persona-card.persona-recruiter.selected {
+    border-color: #d97706;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
+}
+
+.persona-card.persona-recruiter.selected::before {
+    opacity: 1;
+}
+
+.persona-card-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.persona-card-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.persona-card-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.persona-card-modes {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.persona-mode-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    background: var(--bg-card-hover);
+    border-radius: 12px;
+    color: var(--text-muted);
+}
+
+.persona-card.persona-shopify:hover .persona-mode-tag,
+.persona-card.persona-shopify.selected .persona-mode-tag {
+    background: rgba(0, 128, 96, 0.1);
+    color: var(--shopify-green);
+}
+
+.persona-card.persona-recruiter:hover .persona-mode-tag,
+.persona-card.persona-recruiter.selected .persona-mode-tag {
+    background: rgba(217, 119, 6, 0.1);
+    color: #d97706;
+}
+
+@media (prefers-color-scheme: dark) {
+    .persona-card.persona-shopify:hover .persona-mode-tag,
+    .persona-card.persona-shopify.selected .persona-mode-tag {
+        background: rgba(0, 128, 96, 0.2);
+        color: var(--shopify-green-light);
+    }
+    .persona-card.persona-recruiter:hover .persona-mode-tag,
+    .persona-card.persona-recruiter.selected .persona-mode-tag {
+        background: rgba(217, 119, 6, 0.2);
+        color: #fbbf24;
+    }
+}
+
+/* Persona Badge in Sidebar */
+.persona-badge-wrapper {
+    margin-bottom: 0.75rem;
+}
+
+.persona-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition-fast);
+}
+
+.persona-badge:hover {
+    border-color: var(--text-muted);
+    background: var(--bg-card-hover);
+}
+
+.persona-badge-icon {
+    font-size: 1rem;
+}
+
+.persona-badge-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    text-align: left;
+}
+
+.persona-badge-switch {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 0.15rem 0.5rem;
+    background: var(--bg-card-hover);
+    border-radius: 10px;
+    transition: all var(--transition-fast);
+}
+
+.persona-badge:hover .persona-badge-switch {
+    color: var(--shopify-green);
+    background: rgba(0, 128, 96, 0.1);
+}
+
+.persona-badge.recruiter-active:hover .persona-badge-switch {
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.1);
+}
+
 .feature-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -369,11 +574,6 @@ body {
     color: white;
 }
 
-/* 3-option toggle: slider is 33.33% wide */
-.mode-toggle.mode-toggle-3 .mode-slider {
-    width: calc(33.333% - 2px);
-}
-
 .mode-slider {
     position: absolute;
     top: 3px;
@@ -386,14 +586,21 @@ body {
     z-index: 0;
 }
 
-.mode-toggle.context-active .mode-slider {
+.mode-toggle.right-active .mode-slider {
     transform: translateX(100%);
+}
+
+/* Color variants for slider based on active mode */
+.mode-toggle.slider-context .mode-slider {
     background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
 }
 
-.mode-toggle.interview-active .mode-slider {
-    transform: translateX(200%);
+.mode-toggle.slider-interview .mode-slider {
     background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.mode-toggle.slider-jargon .mode-slider {
+    background: linear-gradient(135deg, var(--shopify-green) 0%, var(--shopify-green-dark) 100%);
 }
 
 .mode-icon {
@@ -1492,6 +1699,10 @@ body {
     }
     
     .feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .persona-grid {
         grid-template-columns: 1fr;
     }
 }
