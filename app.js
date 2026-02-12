@@ -776,7 +776,14 @@ const state = {
     recentDetections: new Map(),
     totalDetections: 0,
     userName: null,
-    selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']) // Default: all selected
+    selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']), // Default: all selected
+    // Live Context mode
+    mode: 'jargon', // 'jargon' or 'context'
+    transcriptBuffer: '',
+    contextTimer: null,
+    contextCallInProgress: false,
+    surfacedTopics: new Set(), // Avoid repeating the same topics
+    openaiClient: null
 };
 
 // ============================================
@@ -814,7 +821,11 @@ const elements = {
     testModalClose: document.getElementById('testModalClose'),
     testModalCancel: document.getElementById('testModalCancel'),
     testModalSubmit: document.getElementById('testModalSubmit'),
-    testTextInput: document.getElementById('testTextInput')
+    testTextInput: document.getElementById('testTextInput'),
+    // Mode toggle & context elements
+    modeToggle: document.getElementById('modeToggle'),
+    categorySelector: document.getElementById('categorySelector'),
+    contextIndicator: document.getElementById('contextIndicator')
 };
 
 // ============================================
@@ -889,6 +900,356 @@ function loadSavedCategories() {
 }
 
 // ============================================
+// Mode Management
+// ============================================
+
+function initModeToggle() {
+    // Load saved mode
+    const savedMode = localStorage.getItem('popupvideo_mode');
+    if (savedMode === 'context' || savedMode === 'jargon') {
+        state.mode = savedMode;
+    }
+
+    // Set initial UI state
+    applyModeUI(state.mode);
+
+    // Attach click handlers to mode options
+    const options = elements.modeToggle.querySelectorAll('.mode-option');
+    options.forEach(opt => {
+        opt.addEventListener('click', () => {
+            const newMode = opt.dataset.mode;
+            if (newMode !== state.mode) {
+                switchMode(newMode);
+            }
+        });
+    });
+}
+
+function switchMode(newMode) {
+    const oldMode = state.mode;
+    state.mode = newMode;
+    localStorage.setItem('popupvideo_mode', newMode);
+
+    // Stop context timer if leaving context mode
+    if (oldMode === 'context') {
+        stopContextTimer();
+    }
+
+    // Clear transcript buffer on mode switch
+    state.transcriptBuffer = '';
+
+    // Start context timer if entering context mode and already listening
+    if (newMode === 'context' && state.isListening) {
+        startContextTimer();
+    }
+
+    applyModeUI(newMode);
+}
+
+function applyModeUI(mode) {
+    // Update toggle active states
+    const options = elements.modeToggle.querySelectorAll('.mode-option');
+    options.forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.mode === mode);
+    });
+
+    // Slide the pill
+    elements.modeToggle.classList.toggle('context-active', mode === 'context');
+
+    // Show/hide category selector vs context indicator
+    if (mode === 'context') {
+        elements.categorySelector.style.display = 'none';
+        elements.contextIndicator.style.display = 'block';
+    } else {
+        elements.categorySelector.style.display = 'block';
+        elements.contextIndicator.style.display = 'none';
+    }
+}
+
+// ============================================
+// Live Context - LLM Integration
+// ============================================
+
+const CONTEXT_INTERVAL_MS = 10000; // 10 seconds
+const MIN_BUFFER_LENGTH = 20; // Minimum characters before calling LLM
+
+async function initOpenAIClient() {
+    try {
+        const OpenAI = (await import('https://cdn.jsdelivr.net/npm/openai/+esm')).default;
+        state.openaiClient = new OpenAI({
+            baseURL: `${window.location.origin}/api/ai`,
+            apiKey: 'not-needed',
+            dangerouslyAllowBrowser: true
+        });
+        console.log('OpenAI client initialized for Live Context mode');
+    } catch (err) {
+        console.error('Failed to initialize OpenAI client:', err);
+    }
+}
+
+function startContextTimer() {
+    if (state.contextTimer) return; // Already running
+    state.contextTimer = setInterval(() => {
+        if (state.mode === 'context' && state.isListening && !state.contextCallInProgress) {
+            processTranscriptBuffer();
+        }
+    }, CONTEXT_INTERVAL_MS);
+    console.log('Context timer started');
+}
+
+function stopContextTimer() {
+    if (state.contextTimer) {
+        clearInterval(state.contextTimer);
+        state.contextTimer = null;
+        console.log('Context timer stopped');
+    }
+}
+
+async function processTranscriptBuffer() {
+    const buffer = state.transcriptBuffer.trim();
+    console.log(`[Context] Buffer check — length: ${buffer.length}, min: ${MIN_BUFFER_LENGTH}`);
+    if (buffer.length < MIN_BUFFER_LENGTH) {
+        console.log('[Context] Buffer too short, skipping');
+        return;
+    }
+
+    console.log(`[Context] Processing buffer: "${buffer.substring(0, 80)}..."`);
+
+    // Clear the buffer immediately so new speech accumulates fresh
+    state.transcriptBuffer = '';
+    state.contextCallInProgress = true;
+
+    // Show loading indicator
+    const loader = showContextLoading();
+
+    try {
+        await callLLMForContext(buffer);
+        console.log('[Context] LLM call completed successfully');
+    } catch (err) {
+        console.error('[Context] LLM call FAILED:', err);
+        // On error, show a nothing-notable card so the user sees feedback
+        showNothingNotableCard();
+    } finally {
+        state.contextCallInProgress = false;
+        removeContextLoading(loader);
+    }
+}
+
+function showContextLoading() {
+    const loader = document.createElement('div');
+    loader.className = 'detection-card context-card context-loading';
+    loader.id = 'context-loader';
+    loader.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation">✨ Analyzing...</span>
+        </div>
+        <div class="loading-dots">
+            <span></span><span></span><span></span>
+        </div>
+    `;
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(loader, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(loader);
+    }
+    return loader;
+}
+
+function removeContextLoading(loader) {
+    if (loader && loader.parentNode) {
+        loader.classList.add('fading-out');
+        setTimeout(() => loader.remove(), 300);
+    }
+}
+
+function isNothingNotable(text) {
+    const cleaned = text.trim().toUpperCase().replace(/[^A-Z_]/g, '');
+    return cleaned === 'NOTHING_NOTABLE' || cleaned === 'NOTHINGNOTABLE';
+}
+
+async function callLLMForContext(transcript) {
+    if (!state.openaiClient) {
+        console.error('[Context] OpenAI client not initialized!');
+        throw new Error('OpenAI client not ready');
+    }
+
+    console.log('[Context] Sending to LLM...');
+
+    const topicsList = state.surfacedTopics.size > 0
+        ? `\n\nTopics already covered (do NOT repeat these): ${[...state.surfacedTopics].join(', ')}`
+        : '';
+
+    const systemPrompt = `You are a live context assistant for video calls. Given a conversation snippet, identify any specific places, cities, universities, companies, people, technologies, or notable topics mentioned.
+
+For each notable topic found, provide 1-2 short, interesting facts that would be fun or useful to know in real time. Keep each fact to one sentence.
+
+Format your response as a series of topics, each starting with the topic name in bold like **Topic Name**, followed by the facts as bullet points using "• ".
+
+If the conversation snippet contains nothing notable or specific enough to comment on, respond with exactly: NOTHING_NOTABLE
+
+Important rules:
+- Only surface genuinely interesting, specific facts — not generic definitions
+- Focus on things like: current weather/climate of places, fun facts about universities, notable recent events about companies, interesting trivia about people or technologies
+- Keep it concise and conversational
+- Maximum 3 topics per response${topicsList}`;
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Here's what was just said in the conversation:\n\n"${transcript}"` }
+    ];
+
+    let stream;
+    try {
+        stream = await state.openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: messages,
+            temperature: 0.8,
+            max_tokens: 500,
+            stream: true
+        });
+        console.log('[Context] Stream created successfully');
+    } catch (err) {
+        console.error('[Context] Failed to create stream:', err);
+        throw err;
+    }
+
+    let fullResponse = '';
+    let cardElement = null;
+    let definitionElement = null;
+    let chunkCount = 0;
+
+    try {
+        for await (const chunk of stream) {
+            chunkCount++;
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                fullResponse += content;
+
+                if (chunkCount <= 3) {
+                    console.log(`[Context] Chunk ${chunkCount}: "${content}" (total so far: ${fullResponse.length} chars)`);
+                }
+
+                // Check early if the LLM says nothing notable
+                if (isNothingNotable(fullResponse)) {
+                    console.log('[Context] Detected NOTHING_NOTABLE during streaming');
+                    if (cardElement) cardElement.remove();
+                    showNothingNotableCard();
+                    return;
+                }
+
+                // Don't create a card until we're sure it's real content
+                if (fullResponse.length < 20) continue;
+
+                // Create the card on first substantial content
+                if (!cardElement) {
+                    console.log('[Context] Creating context card');
+                    const result = createContextCard(fullResponse);
+                    cardElement = result.card;
+                    definitionElement = result.definition;
+                } else {
+                    definitionElement.innerHTML = formatContextResponse(fullResponse) + '<span class="streaming-cursor"></span>';
+                }
+            }
+        }
+    } catch (err) {
+        console.error(`[Context] Stream reading failed after ${chunkCount} chunks:`, err);
+        throw err;
+    }
+
+    console.log(`[Context] Stream complete — ${chunkCount} chunks, ${fullResponse.length} chars`);
+    console.log(`[Context] Full response: "${fullResponse.substring(0, 200)}..."`);
+
+    // Final update — remove cursor
+    if (isNothingNotable(fullResponse)) {
+        console.log('[Context] Final check: NOTHING_NOTABLE');
+        if (cardElement) cardElement.remove();
+        showNothingNotableCard();
+    } else if (definitionElement) {
+        console.log('[Context] Final update: rendering complete response');
+        definitionElement.innerHTML = formatContextResponse(fullResponse);
+
+        const topicMatches = fullResponse.match(/\*\*(.+?)\*\*/g);
+        if (topicMatches) {
+            topicMatches.forEach(t => {
+                state.surfacedTopics.add(t.replace(/\*\*/g, '').trim());
+            });
+        }
+    } else if (fullResponse.trim().length > 0) {
+        console.log('[Context] Short response — creating card now');
+        const result = createContextCard(fullResponse);
+        result.definition.innerHTML = formatContextResponse(fullResponse);
+    } else {
+        console.log('[Context] Empty response');
+        showNothingNotableCard();
+    }
+}
+
+function showNothingNotableCard() {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const card = document.createElement('div');
+    card.className = 'detection-card context-card nothing-notable';
+    card.id = `detection-ctx-empty-${Date.now()}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation nothing-notable-text">😴 Nothing interesting as of now</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+    `;
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(card);
+    }
+}
+
+function createContextCard(initialContent) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const card = document.createElement('div');
+    card.className = 'detection-card context-card';
+    card.id = `detection-ctx-${Date.now()}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation">✨ Live Context</span>
+            <span class="timestamp">🧠 ${timestamp}</span>
+        </div>
+        <p class="definition">${formatContextResponse(initialContent)}<span class="streaming-cursor"></span></p>
+    `;
+
+    const definitionEl = card.querySelector('.definition');
+
+    // Insert at top of feed
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(card);
+    }
+
+    state.totalDetections++;
+    updateDetectionCount();
+
+    return { card, definition: definitionEl };
+}
+
+function formatContextResponse(text) {
+    // Convert **bold** to <strong>
+    let formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Convert bullet points
+    formatted = formatted.replace(/^• /gm, '<span style="margin-right:4px;">•</span>');
+    // Convert newlines to breaks
+    formatted = formatted.replace(/\n/g, '<br>');
+    return formatted;
+}
+
+// ============================================
 // Quick API Integration
 // ============================================
 
@@ -952,6 +1313,11 @@ function handleRecognitionStart() {
     state.isListening = true;
     updateStatus('Listening...', 'listening');
     updateToggleButton(true);
+
+    // Start context timer if in context mode
+    if (state.mode === 'context') {
+        startContextTimer();
+    }
 }
 
 function handleRecognitionEnd() {
@@ -975,7 +1341,13 @@ function handleRecognitionResult(event) {
         updateTranscriptPreview(transcript);
         
         if (results[i].isFinal) {
-            detectTerms(transcript);
+            // Always accumulate transcript for context mode
+            state.transcriptBuffer += transcript + ' ';
+
+            // Only run jargon detection in jargon mode
+            if (state.mode === 'jargon') {
+                detectTerms(transcript);
+            }
         }
     }
 }
@@ -1109,6 +1481,8 @@ function clearAllDetections() {
     setTimeout(() => {
         state.detections = [];
         state.recentDetections.clear();
+        state.transcriptBuffer = '';
+        state.surfacedTopics.clear();
         showEmptyState();
     }, cards.length * 50 + 300);
 }
@@ -1492,6 +1866,7 @@ async function startListening() {
 
 function stopListening() {
     state.isListening = false;
+    stopContextTimer();
     if (state.recognition) {
         state.recognition.stop();
     }
@@ -1730,11 +2105,17 @@ function init() {
     // Render category chips
     renderCategoryChips();
     
+    // Initialize mode toggle
+    initModeToggle();
+    
     // Initialize Quick API for user info
     initQuickAPI();
     
     // Initialize speech recognition
     initSpeechRecognition();
+    
+    // Initialize OpenAI client for Live Context mode (async, non-blocking)
+    initOpenAIClient();
     
     // Set up event listeners
     elements.toggleBtn.addEventListener('click', toggleListening);
@@ -1748,21 +2129,37 @@ function init() {
         if (e.key === 'Escape' && !elements.termModal.hidden) {
             closeTermModal();
         }
-        if (e.key === 'Escape' && !elements.testModal.hidden) {
-            closeTestModal();
-        }
     });
 
-    // Test input modal event listeners
-    elements.testBtn.addEventListener('click', openTestModal);
-    elements.testModalClose.addEventListener('click', closeTestModal);
-    elements.testModalOverlay.addEventListener('click', closeTestModal);
-    elements.testModalCancel.addEventListener('click', closeTestModal);
-    elements.testModalSubmit.addEventListener('click', processTestInput);
-    elements.testTextInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            processTestInput();
+    // Test mode toggle
+    const testToggleBtn = document.getElementById('testToggleBtn');
+    const testWrapper = document.getElementById('testInputWrapper');
+    testToggleBtn.addEventListener('click', () => {
+        const isVisible = testWrapper.style.display !== 'none';
+        testWrapper.style.display = isVisible ? 'none' : 'block';
+        testToggleBtn.classList.toggle('active', !isVisible);
+    });
+
+    // Test input - simulates speech for testing
+    const testForm = document.getElementById('testInputForm');
+    const testInput = document.getElementById('testInput');
+    testForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = testInput.value.trim();
+        if (!text) return;
+        
+        console.log(`[Test Input] Simulating speech: "${text}"`);
+        updateTranscriptPreview(text);
+        
+        if (state.mode === 'jargon') {
+            detectTerms(text);
+        } else {
+            // In context mode, add to buffer and immediately process
+            state.transcriptBuffer += text + ' ';
+            processTranscriptBuffer();
         }
+        
+        testInput.value = '';
     });
 
     // Add shake animation CSS
