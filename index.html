@@ -76,12 +76,20 @@
                         <span class="btn-icon" id="toggleIcon">▶</span>
                         <span id="toggleText">Start Listening</span>
                     </button>
-                    <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
-                        <span class="btn-icon">📄</span>
-                    </button>
-                    <button class="btn btn-secondary" id="clearBtn" title="Clear history">
-                        <span class="btn-icon">🗑</span>
-                    </button>
+                    <div class="controls-secondary">
+                        <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
+                            <span class="btn-icon">📄</span>
+                            <span>Export</span>
+                        </button>
+                        <button class="btn btn-secondary" id="clearBtn" title="Clear history">
+                            <span class="btn-icon">🗑</span>
+                            <span>Clear</span>
+                        </button>
+                        <button class="btn btn-secondary" id="testBtn" title="Test with text">
+                            <span class="btn-icon">🧪</span>
+                            <span>Test</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -106,6 +114,51 @@
             <h3>Browser Not Supported</h3>
             <p id="errorMessage">Your browser doesn't support the Web Speech API. Please use Chrome or Edge for the best experience.</p>
             <button class="btn btn-primary" onclick="document.getElementById('errorModal').hidden = true">Got it</button>
+        </div>
+    </div>
+
+    <!-- Term detail modal -->
+    <div class="term-modal" id="termModal" hidden>
+        <div class="term-modal-overlay" id="termModalOverlay"></div>
+        <div class="term-modal-content">
+            <button class="term-modal-close" id="termModalClose">&times;</button>
+            <div class="term-modal-header">
+                <span class="term-modal-term" id="termModalTerm"></span>
+                <span class="term-modal-category" id="termModalCategory"></span>
+            </div>
+            <div class="term-modal-brief" id="termModalBrief"></div>
+            <div class="term-modal-body" id="termModalBody">
+                <div class="term-modal-loading">
+                    <div class="loading-spinner"></div>
+                    <span>Generating detailed explanation...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test input modal -->
+    <div class="test-modal" id="testModal" hidden>
+        <div class="test-modal-overlay" id="testModalOverlay"></div>
+        <div class="test-modal-content">
+            <button class="term-modal-close" id="testModalClose">&times;</button>
+            <div class="test-modal-header">
+                <span class="test-modal-icon">🧪</span>
+                <span class="test-modal-title">Test Term Detection</span>
+            </div>
+            <p class="test-modal-description">Paste or type text to test term detection without audio input.</p>
+            <textarea
+                id="testTextInput"
+                class="test-textarea"
+                placeholder="e.g., Let's discuss the API integration with our 3P partners and review the AOV metrics..."
+                rows="5"
+            ></textarea>
+            <div class="test-modal-actions">
+                <button class="btn btn-secondary" id="testModalCancel">Cancel</button>
+                <button class="btn btn-primary" id="testModalSubmit">
+                    <span class="btn-icon">🔍</span>
+                    Detect Terms
+                </button>
+            </div>
         </div>
     </div>
 

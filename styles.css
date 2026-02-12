@@ -431,7 +431,17 @@ body {
 /* Controls */
 .controls {
     display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+}
+
+.controls-secondary {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.controls-secondary .btn-secondary {
+    flex: 1;
 }
 
 .btn {
@@ -687,6 +697,315 @@ body {
     color: var(--text-secondary);
     margin-bottom: 1.5rem;
     line-height: 1.6;
+}
+
+/* Term Detail Modal */
+.term-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    padding: 1rem;
+}
+
+.term-modal[hidden] {
+    display: none;
+}
+
+.term-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.term-modal-content {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    max-width: 520px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: modalIn 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+}
+
+.term-modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-card-hover);
+    border-radius: 50%;
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.term-modal-close:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.term-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-right: 2rem;
+}
+
+.term-modal-term {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--shopify-green);
+    letter-spacing: 0.5px;
+}
+
+.term-modal-category {
+    padding: 0.25rem 0.6rem;
+    background: linear-gradient(135deg, var(--shopify-green) 0%, var(--shopify-green-dark) 100%);
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+}
+
+.term-modal-brief {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.term-modal-body {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.65;
+}
+
+.term-modal-body h3 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--shopify-green);
+    margin: 1rem 0 0.4rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 0.3rem;
+}
+
+.term-modal-body h3:first-child {
+    margin-top: 0;
+}
+
+.term-modal-body p {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-secondary);
+}
+
+.term-modal-body p:empty,
+.term-modal-body br + br {
+    display: none;
+}
+
+.term-modal-body ul,
+.term-modal-body ol {
+    margin: 0.4rem 0;
+    padding-left: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.term-modal-body ol {
+    list-style-type: decimal;
+}
+
+.term-modal-body ul {
+    list-style-type: disc;
+}
+
+.term-modal-body li {
+    margin-bottom: 0.35rem;
+    padding-left: 0.2rem;
+}
+
+.term-modal-body li::marker {
+    color: var(--shopify-green);
+}
+
+/* Nested lists */
+.term-modal-body ul ul,
+.term-modal-body ol ul,
+.term-modal-body ul ol,
+.term-modal-body ol ol {
+    margin: 0.25rem 0 0.25rem 0;
+    padding-left: 1.25rem;
+}
+
+.term-modal-body li > ul:first-child,
+.term-modal-body li > ol:first-child {
+    margin-top: 0.25rem;
+}
+
+.term-modal-body code {
+    background: var(--bg-card-hover);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: var(--shopify-green);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.term-modal-body strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.term-modal-body em {
+    font-style: italic;
+    color: var(--text-primary);
+}
+
+.term-modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--shopify-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Make detection cards clickable */
+.detection-card {
+    cursor: pointer;
+}
+
+.detection-card:hover .abbreviation {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Test Input Modal */
+.test-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    padding: 1rem;
+}
+
+.test-modal[hidden] {
+    display: none;
+}
+
+.test-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.test-modal-content {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    max-width: 480px;
+    width: 100%;
+    animation: modalIn 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+}
+
+.test-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+}
+
+.test-modal-icon {
+    font-size: 1.5rem;
+}
+
+.test-modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.test-modal-description {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.test-textarea {
+    width: 100%;
+    padding: 0.875rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color var(--transition-fast);
+}
+
+.test-textarea:focus {
+    outline: none;
+    border-color: var(--shopify-green);
+}
+
+.test-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.test-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+    justify-content: flex-end;
+}
+
+.test-modal-actions .btn-primary {
+    flex: none;
+}
+
+.test-modal-actions .btn-secondary {
+    flex: none;
 }
 
 /* Responsive adjustments */

@@ -798,7 +798,23 @@ const elements = {
     errorModal: document.getElementById('errorModal'),
     errorMessage: document.getElementById('errorMessage'),
     categoryChips: document.getElementById('categoryChips'),
-    exportBtn: document.getElementById('exportBtn')
+    exportBtn: document.getElementById('exportBtn'),
+    // Term detail modal elements
+    termModal: document.getElementById('termModal'),
+    termModalOverlay: document.getElementById('termModalOverlay'),
+    termModalClose: document.getElementById('termModalClose'),
+    termModalTerm: document.getElementById('termModalTerm'),
+    termModalCategory: document.getElementById('termModalCategory'),
+    termModalBrief: document.getElementById('termModalBrief'),
+    termModalBody: document.getElementById('termModalBody'),
+    // Test input modal elements
+    testBtn: document.getElementById('testBtn'),
+    testModal: document.getElementById('testModal'),
+    testModalOverlay: document.getElementById('testModalOverlay'),
+    testModalClose: document.getElementById('testModalClose'),
+    testModalCancel: document.getElementById('testModalCancel'),
+    testModalSubmit: document.getElementById('testModalSubmit'),
+    testTextInput: document.getElementById('testTextInput')
 };
 
 // ============================================
@@ -991,7 +1007,7 @@ function handleRecognitionError(event) {
 function detectTerms(transcript) {
     const words = transcript.toLowerCase();
     const now = Date.now();
-    const DUPLICATE_THRESHOLD = 10000;
+    const DUPLICATE_THRESHOLD = Infinity; // Never show duplicate terms
     
     for (const [lowerKey, data] of Object.entries(TERMS_LOWER)) {
         // Skip if category not selected
@@ -1062,7 +1078,10 @@ function renderDetection(detection) {
         </div>
         <p class="definition">${escapeHtml(detection.definition)}</p>
     `;
-    
+
+    // Add click handler to open detailed modal
+    card.addEventListener('click', () => openTermModal(detection));
+
     if (elements.detectionFeed.firstChild) {
         elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
     } else {
@@ -1153,6 +1172,284 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function formatMarkdown(text) {
+    if (!text) return '';
+
+    let html = text;
+
+    // Escape HTML first (but we'll add our own tags)
+    html = html
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Convert **bold** to <strong>
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Convert `code` to <code>
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Split into lines for list processing
+    const lines = html.split('\n');
+    let result = [];
+    let listStack = []; // Track nested list depth [{type: 'ul'/'ol', indent: 0}]
+
+    function closeListsToLevel(targetIndent) {
+        while (listStack.length > 0 && listStack[listStack.length - 1].indent >= targetIndent) {
+            const closed = listStack.pop();
+            result.push(closed.type === 'ol' ? '</ol>' : '</ul>');
+        }
+    }
+
+    function closeAllLists() {
+        while (listStack.length > 0) {
+            const closed = listStack.pop();
+            result.push(closed.type === 'ol' ? '</ol>' : '</ul>');
+        }
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+
+        // Measure leading whitespace for indentation
+        const leadingSpaces = line.match(/^(\s*)/)[1].length;
+        const trimmedLine = line.trim();
+
+        // Check for numbered list (1. 2. 3.)
+        const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.*)$/);
+        // Check for bullet list (- or *)
+        const bulletMatch = trimmedLine.match(/^[-*]\s+(.*)$/);
+
+        if (numberedMatch) {
+            const content = numberedMatch[2];
+            const currentIndent = leadingSpaces;
+
+            // Close deeper lists if we're at a shallower level
+            closeListsToLevel(currentIndent + 1);
+
+            // Open new list if needed
+            if (listStack.length === 0 || listStack[listStack.length - 1].indent < currentIndent) {
+                result.push('<ol>');
+                listStack.push({ type: 'ol', indent: currentIndent });
+            }
+            result.push(`<li>${content}</li>`);
+        } else if (bulletMatch) {
+            const content = bulletMatch[1];
+            const currentIndent = leadingSpaces;
+
+            // Close deeper lists if we're at a shallower level
+            closeListsToLevel(currentIndent + 1);
+
+            // Open new list if needed
+            if (listStack.length === 0 || listStack[listStack.length - 1].indent < currentIndent) {
+                result.push('<ul>');
+                listStack.push({ type: 'ul', indent: currentIndent });
+            }
+            result.push(`<li>${content}</li>`);
+        } else {
+            // Close all lists when we hit non-list content
+            if (trimmedLine !== '') {
+                closeAllLists();
+            }
+
+            // Handle headers (### or ## or lines ending with :)
+            if (trimmedLine.match(/^#{1,3}\s+/)) {
+                const headerContent = trimmedLine.replace(/^#{1,3}\s+/, '');
+                result.push(`<h3>${headerContent}</h3>`);
+            } else if (trimmedLine.match(/^.+:$/) && trimmedLine.length < 50) {
+                // Short lines ending in colon are likely headers
+                result.push(`<h3>${trimmedLine}</h3>`);
+            } else if (trimmedLine === '') {
+                // Empty line - paragraph break
+                result.push('<br>');
+            } else {
+                result.push(`<p>${trimmedLine}</p>`);
+            }
+        }
+    }
+
+    // Close any remaining open lists
+    closeAllLists();
+
+    return result.join('');
+}
+
+// ============================================
+// Term Detail Modal
+// ============================================
+
+let openaiClient = null;
+
+async function initOpenAI() {
+    if (openaiClient) return openaiClient;
+
+    try {
+        console.log('Initializing OpenAI client...');
+        const OpenAI = (await import('https://cdn.jsdelivr.net/npm/openai/+esm')).default;
+        console.log('OpenAI module loaded successfully');
+        openaiClient = new OpenAI({
+            baseURL: `${window.location.origin}/api/ai`,
+            apiKey: 'not-needed',
+            dangerouslyAllowBrowser: true
+        });
+        console.log('OpenAI client created with baseURL:', `${window.location.origin}/api/ai`);
+        return openaiClient;
+    } catch (error) {
+        console.error('Failed to initialize OpenAI client:', error);
+        return null;
+    }
+}
+
+function closeTermModal() {
+    elements.termModal.hidden = true;
+}
+
+async function openTermModal(detection) {
+    // Show modal immediately with basic info
+    elements.termModal.hidden = false;
+    elements.termModalTerm.textContent = detection.term;
+    elements.termModalCategory.textContent = `${detection.categoryIcon} ${detection.categoryName}`;
+    elements.termModalBrief.textContent = detection.definition;
+
+    // Show loading state
+    elements.termModalBody.innerHTML = `
+        <div class="term-modal-loading">
+            <div class="loading-spinner"></div>
+            <span>Generating detailed explanation...</span>
+        </div>
+    `;
+
+    // Build context-aware prompt based on category
+    let contextPrompt = '';
+    if (detection.category === 'leadership') {
+        contextPrompt = `This is a person in Shopify's leadership. Provide:
+1. A brief overview of their role and responsibilities
+2. Their area of focus at Shopify
+3. Why knowing about them matters for new employees
+
+Keep it professional and concise.`;
+    } else if (detection.category === 'shopify') {
+        contextPrompt = `This is Shopify-specific terminology. Provide:
+1. A clear, detailed explanation
+2. How it's used at Shopify specifically
+3. A practical example of when you'd encounter this
+
+Be helpful for someone new to Shopify.`;
+    } else if (detection.category === 'ecommerce') {
+        contextPrompt = `This is an ecommerce term. Provide:
+1. A comprehensive explanation
+2. Why it matters for online commerce
+3. How Shopify merchants would use or encounter this
+
+Keep it practical and relevant.`;
+    } else {
+        contextPrompt = `This is a technical term. Provide:
+1. A clear technical explanation
+2. Why it's important in software/tech
+3. A simple example or analogy
+
+Make it accessible but accurate.`;
+    }
+
+    try {
+        const client = await initOpenAI();
+        if (!client) {
+            console.error('OpenAI client failed to initialize');
+            elements.termModalBody.innerHTML = `
+                <p>Unable to load AI-powered explanations. Here's what we know:</p>
+                <p><strong>${escapeHtml(detection.term)}</strong>: ${escapeHtml(detection.definition)}</p>
+            `;
+            return;
+        }
+
+        console.log('Making API request for term:', detection.term);
+        const stream = await client.chat.completions.create({
+            model: 'gpt-5.1',
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are a helpful assistant explaining terms to new Shopify employees. Be concise and practical.
+
+Format rules:
+- Use short section headers ending with a colon (e.g., "What it means:")
+- Use numbered lists (1. 2. 3.) for steps or ordered items
+- Use bullet points (-) for unordered items
+- Use **bold** for key terms
+- Keep total response under 150 words
+- No introductory phrases like "Sure!" or "Great question!"`
+                },
+                {
+                    role: 'user',
+                    content: `Explain the term "${detection.term}" (basic definition: ${detection.definition}).
+
+${contextPrompt}`
+                }
+            ],
+            temperature: 0.7,
+            stream: true
+        });
+
+        // Clear loading and stream response
+        elements.termModalBody.innerHTML = '';
+        let fullResponse = '';
+
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                fullResponse += content;
+                elements.termModalBody.innerHTML = formatMarkdown(fullResponse);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch AI explanation:', error);
+        console.error('Error details:', {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+            type: error.type
+        });
+        const errorMsg = error.message || 'Unknown error';
+        elements.termModalBody.innerHTML = `
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                Unable to generate detailed explanation.
+                ${errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('Failed')
+                    ? '<br><small>Make sure you\'re running via <code>quick serve</code>.</small>'
+                    : `<br><small>Error: ${escapeHtml(errorMsg)}</small>`}
+            </p>
+            <p><strong>${escapeHtml(detection.term)}</strong>: ${escapeHtml(detection.definition)}</p>
+        `;
+    }
+}
+
+// ============================================
+// Test Input Modal
+// ============================================
+
+function openTestModal() {
+    elements.testModal.hidden = false;
+    elements.testTextInput.value = '';
+    elements.testTextInput.focus();
+}
+
+function closeTestModal() {
+    elements.testModal.hidden = true;
+    elements.testTextInput.value = '';
+}
+
+function processTestInput() {
+    const text = elements.testTextInput.value.trim();
+    if (!text) return;
+
+    // Run term detection on the pasted text
+    detectTerms(text);
+
+    // Update transcript preview to show what was processed
+    updateTranscriptPreview(text.substring(0, 100) + (text.length > 100 ? '...' : ''));
+
+    // Close the modal
+    closeTestModal();
 }
 
 // ============================================
@@ -1443,7 +1740,31 @@ function init() {
     elements.toggleBtn.addEventListener('click', toggleListening);
     elements.clearBtn.addEventListener('click', clearAllDetections);
     elements.exportBtn.addEventListener('click', exportToPDF);
-    
+
+    // Term modal event listeners
+    elements.termModalClose.addEventListener('click', closeTermModal);
+    elements.termModalOverlay.addEventListener('click', closeTermModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !elements.termModal.hidden) {
+            closeTermModal();
+        }
+        if (e.key === 'Escape' && !elements.testModal.hidden) {
+            closeTestModal();
+        }
+    });
+
+    // Test input modal event listeners
+    elements.testBtn.addEventListener('click', openTestModal);
+    elements.testModalClose.addEventListener('click', closeTestModal);
+    elements.testModalOverlay.addEventListener('click', closeTestModal);
+    elements.testModalCancel.addEventListener('click', closeTestModal);
+    elements.testModalSubmit.addEventListener('click', processTestInput);
+    elements.testTextInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            processTestInput();
+        }
+    });
+
     // Add shake animation CSS
     const style = document.createElement('style');
     style.textContent = `
