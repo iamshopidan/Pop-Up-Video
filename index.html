@@ -95,23 +95,23 @@
                         <span class="btn-icon" id="toggleIcon">▶</span>
                         <span id="toggleText">Start Listening</span>
                     </button>
-                    <div class="controls-secondary">
-                        <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
-                            <span class="btn-icon">📄</span>
-                            <span>Export</span>
-                        </button>
-                        <button class="btn btn-secondary" id="clearBtn" title="Clear history">
-                            <span class="btn-icon">🗑</span>
-                            <span>Clear</span>
-                        </button>
-                        <button class="btn btn-secondary" id="testBtn" title="Test with text">
-                            <span class="btn-icon">🧪</span>
-                            <span>Test</span>
-                        </button>
-                    </div>
+                </div>
+                <div class="controls controls-secondary">
+                    <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
+                        <span class="btn-icon">📄</span>
+                        <span class="btn-label">Export</span>
+                    </button>
+                    <button class="btn btn-secondary" id="clearBtn" title="Clear history">
+                        <span class="btn-icon">🗑</span>
+                        <span class="btn-label">Clear</span>
+                    </button>
+                    <button class="btn btn-secondary" id="testToggleBtn" title="Toggle test input">
+                        <span class="btn-icon">🧪</span>
+                        <span class="btn-label">Test</span>
+                    </button>
                 </div>
 
-                <div class="test-input-wrapper">
+                <div class="test-input-wrapper" id="testInputWrapper" style="display: none;">
                     <form id="testInputForm" class="test-input-form">
                         <input type="text" id="testInput" class="test-input" placeholder="Type to simulate speech..." autocomplete="off">
                         <button type="submit" class="btn btn-test" title="Send">↵</button>

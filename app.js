@@ -2129,24 +2129,18 @@ function init() {
         if (e.key === 'Escape' && !elements.termModal.hidden) {
             closeTermModal();
         }
-        if (e.key === 'Escape' && !elements.testModal.hidden) {
-            closeTestModal();
-        }
     });
 
-    // Test input modal event listeners
-    elements.testBtn.addEventListener('click', openTestModal);
-    elements.testModalClose.addEventListener('click', closeTestModal);
-    elements.testModalOverlay.addEventListener('click', closeTestModal);
-    elements.testModalCancel.addEventListener('click', closeTestModal);
-    elements.testModalSubmit.addEventListener('click', processTestInput);
-    elements.testTextInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            processTestInput();
-        }
+    // Test mode toggle
+    const testToggleBtn = document.getElementById('testToggleBtn');
+    const testWrapper = document.getElementById('testInputWrapper');
+    testToggleBtn.addEventListener('click', () => {
+        const isVisible = testWrapper.style.display !== 'none';
+        testWrapper.style.display = isVisible ? 'none' : 'block';
+        testToggleBtn.classList.toggle('active', !isVisible);
     });
 
-    // Test input form - simulates speech for testing (inline)
+    // Test input - simulates speech for testing
     const testForm = document.getElementById('testInputForm');
     const testInput = document.getElementById('testInput');
     testForm.addEventListener('submit', (e) => {

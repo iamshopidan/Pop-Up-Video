@@ -547,10 +547,17 @@ body {
 .controls-secondary {
     display: flex;
     gap: 0.5rem;
+    margin-top: 0.5rem;
+    justify-content: center;
 }
 
 .controls-secondary .btn-secondary {
     flex: 1;
+    font-size: 0.75rem;
+}
+
+.btn-label {
+    font-size: 0.75rem;
 }
 
 .btn {
@@ -656,6 +663,12 @@ body {
     background: var(--bg-card-hover);
     border-color: var(--shopify-green);
     color: var(--shopify-green);
+}
+
+#testToggleBtn.active {
+    background: rgba(124, 58, 237, 0.1);
+    border-color: #7c3aed;
+    color: #7c3aed;
 }
 
 /* Detection Feed */
