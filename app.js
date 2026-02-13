@@ -792,7 +792,10 @@ const state = {
     interviewTranscriptHistory: [], // Rolling window of recent transcript chunks
     interviewSuggestedQuestions: new Set(), // Avoid repeating questions
     interviewTimer: null,
-    interviewCallInProgress: false
+    interviewCallInProgress: false,
+    // Interview resume
+    interviewResumeText: '',
+    interviewResumeFileName: ''
 };
 
 // ============================================
@@ -842,7 +845,12 @@ const elements = {
     // Interview mode elements
     interviewSetup: document.getElementById('interviewSetup'),
     interviewRole: document.getElementById('interviewRole'),
-    interviewFocus: document.getElementById('interviewFocus')
+    interviewFocus: document.getElementById('interviewFocus'),
+    // Interview resume elements
+    interviewResume: document.getElementById('interviewResume'),
+    interviewResumeBtn: document.getElementById('interviewResumeBtn'),
+    interviewResumeClear: document.getElementById('interviewResumeClear'),
+    interviewResumeStatus: document.getElementById('interviewResumeStatus')
 };
 
 // ============================================
@@ -990,6 +998,9 @@ function initModeToggle() {
         elements.interviewFocus.value = savedFocus;
     }
 
+    // Restore resume from sessionStorage if present
+    restoreResumeFromSession();
+
     // Interview role input listener
     elements.interviewRole.addEventListener('input', (e) => {
         state.interviewRole = e.target.value;
@@ -1001,6 +1012,22 @@ function initModeToggle() {
         state.interviewFocus = e.target.value;
         localStorage.setItem('popupvideo_interview_focus', e.target.value);
     });
+
+    // Resume upload — button click triggers hidden file input
+    elements.interviewResumeBtn.addEventListener('click', () => {
+        elements.interviewResume.click();
+    });
+
+    // Resume file selected
+    elements.interviewResume.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            handleResumeUpload(file);
+        }
+    });
+
+    // Resume clear button
+    elements.interviewResumeClear.addEventListener('click', clearResume);
 }
 
 function selectPersona(personaId) {
@@ -1420,6 +1447,271 @@ function formatContextResponse(text) {
 }
 
 // ============================================
+// Interview Mode - Resume Upload
+// ============================================
+
+let pdfjsLib = null; // Lazy-loaded PDF.js library
+
+async function loadPdfJs() {
+    if (pdfjsLib) return pdfjsLib;
+    try {
+        const module = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/+esm');
+        pdfjsLib = module;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+        console.log('[Resume] PDF.js loaded successfully');
+        return pdfjsLib;
+    } catch (err) {
+        console.error('[Resume] Failed to load PDF.js:', err);
+        throw new Error('Could not load PDF reader');
+    }
+}
+
+async function extractTextFromPDF(file) {
+    const pdfjs = await loadPdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+    }
+    return fullText.trim();
+}
+
+function extractTextFromTxt(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read text file'));
+        reader.readAsText(file);
+    });
+}
+
+async function handleResumeUpload(file) {
+    if (!file) return;
+
+    const fileName = file.name;
+    const ext = fileName.split('.').pop().toLowerCase();
+
+    // Update UI to show extracting state
+    elements.interviewResumeStatus.textContent = 'Extracting...';
+    elements.interviewResumeStatus.classList.add('extracting');
+    elements.interviewResumeBtn.classList.add('has-file');
+
+    try {
+        let text = '';
+        if (ext === 'pdf') {
+            text = await extractTextFromPDF(file);
+        } else if (ext === 'txt') {
+            text = await extractTextFromTxt(file);
+        } else {
+            throw new Error(`Unsupported file type: .${ext}`);
+        }
+
+        if (!text || text.trim().length < 20) {
+            throw new Error('Could not extract meaningful text from the file');
+        }
+
+        // Store in state
+        state.interviewResumeText = text;
+        state.interviewResumeFileName = fileName;
+
+        // Persist in sessionStorage
+        sessionStorage.setItem('popupvideo_resume_text', text);
+        sessionStorage.setItem('popupvideo_resume_name', fileName);
+
+        // Update UI
+        const charCount = text.length;
+        const displayName = fileName.length > 18 ? fileName.substring(0, 15) + '...' : fileName;
+        elements.interviewResumeBtn.querySelector('.resume-btn-text').textContent = displayName;
+        elements.interviewResumeStatus.textContent = `${(charCount / 1000).toFixed(1)}k chars`;
+        elements.interviewResumeStatus.classList.remove('extracting');
+        elements.interviewResumeClear.hidden = false;
+
+        console.log(`[Resume] Extracted ${charCount} chars from "${fileName}"`);
+
+        // Generate starter questions from the resume
+        generateResumeQuestions();
+
+    } catch (err) {
+        console.error('[Resume] Upload failed:', err);
+        elements.interviewResumeStatus.textContent = err.message || 'Upload failed';
+        elements.interviewResumeStatus.classList.remove('extracting');
+        elements.interviewResumeBtn.classList.remove('has-file');
+
+        // Clear state on failure
+        state.interviewResumeText = '';
+        state.interviewResumeFileName = '';
+        sessionStorage.removeItem('popupvideo_resume_text');
+        sessionStorage.removeItem('popupvideo_resume_name');
+    }
+}
+
+function clearResume() {
+    state.interviewResumeText = '';
+    state.interviewResumeFileName = '';
+    sessionStorage.removeItem('popupvideo_resume_text');
+    sessionStorage.removeItem('popupvideo_resume_name');
+
+    elements.interviewResumeBtn.querySelector('.resume-btn-text').textContent = 'Upload Resume';
+    elements.interviewResumeBtn.classList.remove('has-file');
+    elements.interviewResumeClear.hidden = true;
+    elements.interviewResumeStatus.textContent = '';
+    elements.interviewResumeStatus.classList.remove('extracting');
+    elements.interviewResume.value = '';
+
+    console.log('[Resume] Cleared');
+}
+
+function restoreResumeFromSession() {
+    const savedText = sessionStorage.getItem('popupvideo_resume_text');
+    const savedName = sessionStorage.getItem('popupvideo_resume_name');
+    if (savedText && savedName) {
+        state.interviewResumeText = savedText;
+        state.interviewResumeFileName = savedName;
+
+        const displayName = savedName.length > 18 ? savedName.substring(0, 15) + '...' : savedName;
+        elements.interviewResumeBtn.querySelector('.resume-btn-text').textContent = displayName;
+        elements.interviewResumeBtn.classList.add('has-file');
+        elements.interviewResumeClear.hidden = false;
+        elements.interviewResumeStatus.textContent = `${(savedText.length / 1000).toFixed(1)}k chars`;
+
+        console.log(`[Resume] Restored "${savedName}" from session (${savedText.length} chars)`);
+    }
+}
+
+async function generateResumeQuestions() {
+    if (!state.openaiClient) {
+        console.error('[Resume] OpenAI client not initialized — skipping starter questions');
+        return;
+    }
+    if (!state.interviewResumeText) return;
+
+    const role = state.interviewRole.trim() || 'the open position';
+    const focus = state.interviewFocus;
+    const focusLabels = { general: 'General', behavioral: 'Behavioral', technical: 'Technical', culture: 'Culture Fit' };
+    const focusLabel = focusLabels[focus] || 'General';
+
+    // Truncate resume to ~4000 chars to stay within token limits
+    const resumeSnippet = state.interviewResumeText.substring(0, 4000);
+
+    const systemPrompt = `You are an expert interview coach helping an HR recruiter prepare for an interview. Based on the candidate's resume provided below, generate 3-5 insightful questions the recruiter should ask during the interview for ${role}.
+
+Focus area: ${focusLabel}
+
+Guidelines:
+- Identify gaps in employment or career transitions worth exploring
+- Highlight impressive claims or achievements that deserve deeper probing
+- Note skills or technologies mentioned that should be validated
+- Spot patterns (e.g., short tenures, role changes) worth understanding
+- Frame questions conversationally — these should feel natural in an interview
+- If the focus is behavioral, ask about specific past experiences on their resume
+- If the focus is technical, probe specific technologies or projects they listed
+
+Format your response EXACTLY as follows:
+
+**Q: [The suggested question]**
+Why: [One brief sentence explaining why this question is valuable]
+
+**Q: [Second question]**
+Why: [Brief rationale]`;
+
+    const userContent = `Here is the candidate's resume:\n\n${resumeSnippet}`;
+
+    // Show a loading card
+    const loader = showInterviewLoading();
+    // Override loader text to indicate resume analysis
+    const loaderAbbr = loader.querySelector('.abbreviation');
+    if (loaderAbbr) loaderAbbr.textContent = '📄 Analyzing resume...';
+
+    try {
+        const stream = await state.openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent }
+            ],
+            temperature: 0.7,
+            max_tokens: 800,
+            stream: true
+        });
+
+        let fullResponse = '';
+        let card = null;
+
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (!content) continue;
+            fullResponse += content;
+
+            if (!card) {
+                // Remove loader and create the card
+                removeContextLoading(loader);
+                card = createResumeQuestionCard(fullResponse);
+            } else {
+                // Update card content while streaming
+                card.definition.innerHTML = formatInterviewResponse(fullResponse) + '<span class="streaming-cursor"></span>';
+            }
+        }
+
+        // Final render without cursor
+        if (card) {
+            card.definition.innerHTML = formatInterviewResponse(fullResponse);
+        } else {
+            removeContextLoading(loader);
+        }
+
+        // Track these questions to avoid repeating them later
+        const questionMatches = fullResponse.match(/\*\*Q:\s*(.+?)\*\*/g);
+        if (questionMatches) {
+            questionMatches.forEach(q => {
+                const cleaned = q.replace(/\*\*/g, '').replace(/^Q:\s*/, '').trim();
+                state.interviewSuggestedQuestions.add(cleaned);
+            });
+        }
+
+        console.log('[Resume] Starter questions generated successfully');
+    } catch (err) {
+        console.error('[Resume] Failed to generate starter questions:', err);
+        removeContextLoading(loader);
+    }
+}
+
+function createResumeQuestionCard(initialContent) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const card = document.createElement('div');
+    card.className = 'detection-card interview-card resume-card';
+    card.id = `detection-resume-${Date.now()}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="abbreviation">📄 Resume-Based Questions</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <span class="interview-focus-tag">Resume Analysis</span>
+        <div class="definition">${formatInterviewResponse(initialContent)}<span class="streaming-cursor"></span></div>
+    `;
+
+    const definitionEl = card.querySelector('.definition');
+
+    hideEmptyState();
+    if (elements.detectionFeed.firstChild) {
+        elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
+    } else {
+        elements.detectionFeed.appendChild(card);
+    }
+
+    state.totalDetections++;
+    updateDetectionCount();
+
+    return { card, definition: definitionEl };
+}
+
+// ============================================
 // Interview Mode - LLM Integration
 // ============================================
 
@@ -1518,6 +1810,21 @@ function showInterviewNothingCard() {
     }
 }
 
+function buildResumeContext() {
+    if (!state.interviewResumeText) return '';
+    // Truncate to ~3000 chars to keep the prompt reasonable
+    const snippet = state.interviewResumeText.substring(0, 3000);
+    return `\n\nThe candidate's resume/CV is provided below for additional context. Use it to:
+- Reference specific experiences or skills they listed
+- Ask about gaps or transitions in their career
+- Probe claims that seem vague or impressive
+- Connect what they're saying now to what's on their resume
+
+=== RESUME ===
+${snippet}
+=== END RESUME ===`;
+}
+
 function buildInterviewSystemPrompt() {
     const role = state.interviewRole.trim() || 'the open position';
     const focus = state.interviewFocus;
@@ -1567,7 +1874,7 @@ Important:
 - Maximum 3 questions per response
 - Questions should be conversational, not interrogative — the recruiter needs to ask them naturally
 - Each question should target something different (don't ask variations of the same thing)
-- Keep "Why" explanations to one sentence${previousQuestions}`;
+- Keep "Why" explanations to one sentence${previousQuestions}${buildResumeContext()}`;
 }
 
 async function callLLMForInterview() {
