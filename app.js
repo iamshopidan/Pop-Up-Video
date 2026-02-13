@@ -816,6 +816,7 @@ const elements = {
     errorModal: document.getElementById('errorModal'),
     errorMessage: document.getElementById('errorMessage'),
     categoryChips: document.getElementById('categoryChips'),
+    categoryToggle: document.getElementById('categoryToggle'),
     exportBtn: document.getElementById('exportBtn'),
     // Term detail modal elements
     termModal: document.getElementById('termModal'),
@@ -839,6 +840,7 @@ const elements = {
     contextIndicator: document.getElementById('contextIndicator'),
     // Interview mode elements
     interviewSetup: document.getElementById('interviewSetup'),
+    interviewToggle: document.getElementById('interviewToggle'),
     interviewRole: document.getElementById('interviewRole'),
     interviewFocus: document.getElementById('interviewFocus'),
     // Interview resume elements
@@ -2888,6 +2890,16 @@ function init() {
     elements.toggleBtn.addEventListener('click', toggleListening);
     elements.clearBtn.addEventListener('click', clearAllDetections);
     elements.exportBtn.addEventListener('click', exportToPDF);
+
+    // Category selector toggle (collapsible)
+    elements.categoryToggle.addEventListener('click', () => {
+        elements.categorySelector.classList.toggle('collapsed');
+    });
+
+    // Interview setup toggle (collapsible)
+    elements.interviewToggle.addEventListener('click', () => {
+        elements.interviewSetup.classList.toggle('collapsed');
+    });
 
     // Term modal event listeners
     elements.termModalClose.addEventListener('click', closeTermModal);

@@ -50,7 +50,10 @@
                     </div>
 
                     <div class="category-selector" id="categorySelector">
-                        <label class="category-label">Categories selected</label>
+                        <button class="category-header" id="categoryToggle">
+                            <span class="category-label">Categories selected</span>
+                            <span class="category-toggle-icon">▼</span>
+                        </button>
                         <div class="category-chips" id="categoryChips">
                             <!-- Categories will be populated by JavaScript -->
                         </div>
@@ -64,6 +67,10 @@
                     </div>
 
                     <div class="interview-setup" id="interviewSetup" style="display: none;">
+                        <button class="interview-header" id="interviewToggle">
+                            <span class="interview-header-label">Interview setup</span>
+                            <span class="interview-toggle-icon">▼</span>
+                        </button>
                         <div class="interview-setup-inner">
                             <label class="interview-label" for="interviewRole">Role being interviewed</label>
                             <input type="text" id="interviewRole" class="interview-role-input" placeholder="e.g. Senior Frontend Developer" autocomplete="off">
