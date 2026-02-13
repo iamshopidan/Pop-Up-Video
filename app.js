@@ -1141,6 +1141,10 @@ function applyModeUI(mode) {
     elements.contextIndicator.style.display = mode === 'context' ? 'block' : 'none';
     elements.interviewSetup.style.display = mode === 'interview' ? 'block' : 'none';
 
+    // Update context indicator color based on persona
+    elements.contextIndicator.classList.remove('persona-shopify', 'persona-recruiter');
+    elements.contextIndicator.classList.add(`persona-${state.persona}`);
+
     // Update Start Listening button color based on persona
     elements.toggleBtn.classList.remove('persona-shopify', 'persona-recruiter');
     elements.toggleBtn.classList.add(`persona-${state.persona}`);

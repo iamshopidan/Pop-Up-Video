@@ -415,29 +415,30 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
-    background: rgba(124, 58, 237, 0.08);
-    border: 1px solid rgba(124, 58, 237, 0.2);
+    background: rgba(26, 31, 60, 0.65);
+    border: 1px solid rgba(26, 31, 60, 0.6);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
-    color: #7c3aed;
+    color: var(--text-primary);
     font-weight: 500;
 }
 
-@media (prefers-color-scheme: dark) {
-    .context-indicator-inner {
-        background: rgba(124, 58, 237, 0.15);
-        border-color: rgba(124, 58, 237, 0.3);
-        color: #a78bfa;
-    }
+.context-indicator.persona-recruiter .context-indicator-inner {
+    background: rgba(124, 58, 237, 0.15);
+    border-color: rgba(124, 58, 237, 0.3);
 }
 
 .context-pulse-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #7c3aed;
+    background: var(--contxt-navy);
     flex-shrink: 0;
     animation: contextPulse 2s infinite;
+}
+
+.context-indicator.persona-recruiter .context-pulse-dot {
+    background: #7c3aed;
 }
 
 @keyframes contextPulse {
@@ -487,7 +488,7 @@ body {
 }
 
 .interview-role-input:focus {
-    border-color: #d97706;
+    border-color: #7c3aed;
 }
 
 .interview-focus-select {
@@ -510,7 +511,7 @@ body {
 }
 
 .interview-focus-select:focus {
-    border-color: #d97706;
+    border-color: #7c3aed;
 }
 
 .interview-indicator-inner {
@@ -1040,7 +1041,7 @@ body {
 .abbreviation {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--contxt-navy);
+    color: #ffffff;
     letter-spacing: 0.5px;
 }
 
@@ -1193,7 +1194,7 @@ body {
 .term-modal-term {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--contxt-navy);
+    color: #ffffff;
     letter-spacing: 0.5px;
 }
 
@@ -1223,7 +1224,7 @@ body {
 .term-modal-body h3 {
     font-size: 0.8rem;
     font-weight: 700;
-    color: var(--contxt-navy);
+    color: #ffffff;
     margin: 1rem 0 0.4rem 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
