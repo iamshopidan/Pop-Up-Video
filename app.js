@@ -777,8 +777,10 @@ const state = {
     totalDetections: 0,
     userName: null,
     selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']), // Default: all selected
-    // Live Context mode
+    // Persona & mode
+    persona: 'shopify', // 'shopify' or 'recruiter'
     mode: 'jargon', // 'jargon', 'context', or 'interview'
+    // Live Context mode
     transcriptBuffer: '',
     contextTimer: null,
     contextCallInProgress: false,
@@ -829,7 +831,11 @@ const elements = {
     testModalCancel: document.getElementById('testModalCancel'),
     testModalSubmit: document.getElementById('testModalSubmit'),
     testTextInput: document.getElementById('testTextInput'),
-    // Mode toggle & context elements
+    // Persona & mode toggle elements
+    welcomeScreen: document.getElementById('welcomeScreen'),
+    personaBadge: document.getElementById('personaBadge'),
+    personaBadgeIcon: document.getElementById('personaBadgeIcon'),
+    personaBadgeLabel: document.getElementById('personaBadgeLabel'),
     modeToggle: document.getElementById('modeToggle'),
     categorySelector: document.getElementById('categorySelector'),
     contextIndicator: document.getElementById('contextIndicator'),
@@ -914,13 +920,64 @@ function loadSavedCategories() {
 // Mode Management
 // ============================================
 
-function initModeToggle() {
-    // Load saved mode
-    const savedMode = localStorage.getItem('popupvideo_mode');
-    if (['context', 'jargon', 'interview'].includes(savedMode)) {
-        state.mode = savedMode;
+// Persona definitions: which modes are available for each persona
+const PERSONAS = {
+    shopify: {
+        label: 'Shopify Context',
+        icon: '🟢',
+        modes: [
+            { id: 'jargon', label: 'Jargon', icon: '📚' },
+            { id: 'context', label: 'Context', icon: '✨' }
+        ],
+        defaultMode: 'jargon'
+    },
+    recruiter: {
+        label: 'Recruiter Mode',
+        icon: '🎯',
+        modes: [
+            { id: 'context', label: 'Context', icon: '✨' },
+            { id: 'interview', label: 'Interview', icon: '🎯' }
+        ],
+        defaultMode: 'context'
+    }
+};
+
+function initPersona() {
+    // Load saved persona
+    const savedPersona = localStorage.getItem('popupvideo_persona');
+    if (savedPersona && PERSONAS[savedPersona]) {
+        state.persona = savedPersona;
     }
 
+    // Load saved mode (validate it belongs to this persona)
+    const savedMode = localStorage.getItem('popupvideo_mode');
+    const personaDef = PERSONAS[state.persona];
+    const validModes = personaDef.modes.map(m => m.id);
+    if (savedMode && validModes.includes(savedMode)) {
+        state.mode = savedMode;
+    } else {
+        state.mode = personaDef.defaultMode;
+    }
+
+    // Persona card click handlers on welcome screen
+    document.querySelectorAll('.persona-card').forEach(card => {
+        card.addEventListener('click', () => {
+            selectPersona(card.dataset.persona);
+        });
+    });
+
+    // Persona badge click — go back to persona selection
+    elements.personaBadge.addEventListener('click', showPersonaSelector);
+
+    // Highlight current persona on welcome screen
+    updatePersonaCardHighlight();
+
+    // Build toggle and apply UI
+    buildModeToggle();
+    applyModeUI(state.mode);
+}
+
+function initModeToggle() {
     // Load saved interview settings
     const savedRole = localStorage.getItem('popupvideo_interview_role');
     const savedFocus = localStorage.getItem('popupvideo_interview_focus');
@@ -933,20 +990,6 @@ function initModeToggle() {
         elements.interviewFocus.value = savedFocus;
     }
 
-    // Set initial UI state
-    applyModeUI(state.mode);
-
-    // Attach click handlers to mode options
-    const options = elements.modeToggle.querySelectorAll('.mode-option');
-    options.forEach(opt => {
-        opt.addEventListener('click', () => {
-            const newMode = opt.dataset.mode;
-            if (newMode !== state.mode) {
-                switchMode(newMode);
-            }
-        });
-    });
-
     // Interview role input listener
     elements.interviewRole.addEventListener('input', (e) => {
         state.interviewRole = e.target.value;
@@ -958,6 +1001,89 @@ function initModeToggle() {
         state.interviewFocus = e.target.value;
         localStorage.setItem('popupvideo_interview_focus', e.target.value);
     });
+}
+
+function selectPersona(personaId) {
+    if (!PERSONAS[personaId]) return;
+    const oldMode = state.mode;
+    state.persona = personaId;
+    localStorage.setItem('popupvideo_persona', personaId);
+
+    // Set default mode for the new persona
+    const personaDef = PERSONAS[personaId];
+    const validModes = personaDef.modes.map(m => m.id);
+
+    // If current mode isn't valid for this persona, switch to default
+    if (!validModes.includes(state.mode)) {
+        // Stop any running timers from old mode
+        if (oldMode === 'context') stopContextTimer();
+        if (oldMode === 'interview') stopInterviewTimer();
+        state.transcriptBuffer = '';
+
+        state.mode = personaDef.defaultMode;
+        localStorage.setItem('popupvideo_mode', state.mode);
+
+        // Start timer if needed
+        if (state.mode === 'context' && state.isListening) startContextTimer();
+        if (state.mode === 'interview' && state.isListening) startInterviewTimer();
+    }
+
+    updatePersonaCardHighlight();
+    buildModeToggle();
+    applyModeUI(state.mode);
+    updatePersonaBadge();
+}
+
+function showPersonaSelector() {
+    // Scroll the welcome screen into view / ensure it's visible
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+        mainContent.scrollIntoView({ behavior: 'smooth' });
+    }
+    // Briefly pulse the persona cards
+    document.querySelectorAll('.persona-card').forEach(card => {
+        card.style.animation = 'none';
+        requestAnimationFrame(() => {
+            card.style.animation = 'fadeInUp 0.4s ease';
+        });
+    });
+}
+
+function updatePersonaCardHighlight() {
+    document.querySelectorAll('.persona-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.persona === state.persona);
+    });
+}
+
+function updatePersonaBadge() {
+    const personaDef = PERSONAS[state.persona];
+    elements.personaBadgeIcon.textContent = personaDef.icon;
+    elements.personaBadgeLabel.textContent = personaDef.label;
+    elements.personaBadge.classList.toggle('recruiter-active', state.persona === 'recruiter');
+}
+
+function buildModeToggle() {
+    const personaDef = PERSONAS[state.persona];
+    const slider = elements.modeToggle.querySelector('.mode-slider');
+
+    // Remove existing buttons
+    elements.modeToggle.querySelectorAll('.mode-option').forEach(btn => btn.remove());
+
+    // Create new buttons
+    personaDef.modes.forEach(modeDef => {
+        const btn = document.createElement('button');
+        btn.className = 'mode-option';
+        btn.dataset.mode = modeDef.id;
+        btn.innerHTML = `<span class="mode-icon">${modeDef.icon}</span> ${modeDef.label}`;
+        btn.addEventListener('click', () => {
+            if (modeDef.id !== state.mode) {
+                switchMode(modeDef.id);
+            }
+        });
+        elements.modeToggle.insertBefore(btn, slider);
+    });
+
+    updatePersonaBadge();
 }
 
 function switchMode(newMode) {
@@ -988,19 +1114,21 @@ function switchMode(newMode) {
 }
 
 function applyModeUI(mode) {
+    const personaDef = PERSONAS[state.persona];
+    const modeIndex = personaDef.modes.findIndex(m => m.id === mode);
+
     // Update toggle active states
     const options = elements.modeToggle.querySelectorAll('.mode-option');
     options.forEach(opt => {
         opt.classList.toggle('active', opt.dataset.mode === mode);
     });
 
-    // Slide the pill — remove all mode classes, add the active one
-    elements.modeToggle.classList.remove('context-active', 'interview-active');
-    if (mode === 'context') {
-        elements.modeToggle.classList.add('context-active');
-    } else if (mode === 'interview') {
-        elements.modeToggle.classList.add('interview-active');
+    // Slide the pill — position based on index (always 2 options now)
+    elements.modeToggle.classList.remove('right-active', 'slider-jargon', 'slider-context', 'slider-interview');
+    if (modeIndex === 1) {
+        elements.modeToggle.classList.add('right-active');
     }
+    elements.modeToggle.classList.add(`slider-${mode}`);
 
     // Show/hide mode-specific panels
     elements.categorySelector.style.display = mode === 'jargon' ? 'block' : 'none';
@@ -2453,7 +2581,8 @@ function init() {
     // Render category chips
     renderCategoryChips();
     
-    // Initialize mode toggle
+    // Initialize persona & mode system
+    initPersona();
     initModeToggle();
     
     // Initialize Quick API for user info

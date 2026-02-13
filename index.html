@@ -15,31 +15,33 @@
     <div class="app-container">
         <!-- Main content area (left side - for Google Meet) -->
         <main class="main-content">
-            <div class="welcome-screen">
+            <div class="welcome-screen" id="welcomeScreen">
                 <img src="logo.jpg" alt="Pop-Up Video" class="welcome-logo">
                 <h1 class="sr-only">Pop-Up Video</h1>
-                <p class="welcome-subtitle">Decode the conversation</p>
+                <p class="welcome-subtitle">Choose your mode</p>
                 <p class="welcome-description">
                     Keep this window open alongside your Google Meet call.<br>
-                    We'll detect and define unknown terms in real-time.
+                    Select how you'd like Pop-Up Video to assist you.
                 </p>
-                <div class="feature-grid">
-                    <div class="feature-item">
-                        <span class="feature-icon">🎤</span>
-                        <span>Live Audio Detection</span>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">📚</span>
-                        <span>500+ Tech Terms</span>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">🟢</span>
-                        <span>Shopify Jargon</span>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">⚡</span>
-                        <span>Real-time Results</span>
-                    </div>
+                <div class="persona-grid">
+                    <button class="persona-card persona-shopify" data-persona="shopify">
+                        <div class="persona-card-icon">🟢</div>
+                        <h2 class="persona-card-title">Shopify Context</h2>
+                        <p class="persona-card-desc">Decode Shopify jargon and get real-time context about topics discussed in meetings.</p>
+                        <div class="persona-card-modes">
+                            <span class="persona-mode-tag">📚 Jargon</span>
+                            <span class="persona-mode-tag">✨ Live Context</span>
+                        </div>
+                    </button>
+                    <button class="persona-card persona-recruiter" data-persona="recruiter">
+                        <div class="persona-card-icon">🎯</div>
+                        <h2 class="persona-card-title">Recruiter Mode</h2>
+                        <p class="persona-card-desc">Get suggested follow-up questions and deeper interview insights in real-time.</p>
+                        <div class="persona-card-modes">
+                            <span class="persona-mode-tag">✨ Live Context</span>
+                            <span class="persona-mode-tag">🎯 Interview</span>
+                        </div>
+                    </button>
                 </div>
             </div>
         </main>
@@ -64,17 +66,17 @@
                     <div class="transcript-preview" id="transcriptPreview"></div>
                 </div>
 
+                <div class="persona-badge-wrapper" id="personaBadgeWrapper">
+                    <button class="persona-badge" id="personaBadge" title="Switch mode">
+                        <span class="persona-badge-icon" id="personaBadgeIcon">🟢</span>
+                        <span class="persona-badge-label" id="personaBadgeLabel">Shopify Context</span>
+                        <span class="persona-badge-switch">Switch</span>
+                    </button>
+                </div>
+
                 <div class="mode-toggle-wrapper">
-                    <div class="mode-toggle mode-toggle-3" id="modeToggle">
-                        <button class="mode-option active" data-mode="jargon">
-                            <span class="mode-icon">📚</span> Jargon
-                        </button>
-                        <button class="mode-option" data-mode="context">
-                            <span class="mode-icon">✨</span> Context
-                        </button>
-                        <button class="mode-option" data-mode="interview">
-                            <span class="mode-icon">🎯</span> Interview
-                        </button>
+                    <div class="mode-toggle" id="modeToggle">
+                        <!-- Dynamically populated by JS based on persona -->
                         <div class="mode-slider"></div>
                     </div>
                 </div>
