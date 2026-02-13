@@ -106,6 +106,16 @@
                             <option value="technical">Technical</option>
                             <option value="culture">Culture Fit</option>
                         </select>
+                        <label class="interview-label" for="interviewResume">Candidate resume (optional)</label>
+                        <div class="interview-resume-upload" id="interviewResumeUpload">
+                            <input type="file" id="interviewResume" accept=".pdf,.txt" hidden>
+                            <button type="button" class="interview-resume-btn" id="interviewResumeBtn">
+                                <span class="resume-btn-icon">📄</span>
+                                <span class="resume-btn-text">Upload Resume</span>
+                            </button>
+                            <button type="button" class="interview-resume-clear" id="interviewResumeClear" hidden title="Remove resume">&times;</button>
+                            <span class="interview-resume-status" id="interviewResumeStatus"></span>
+                        </div>
                     </div>
                     <div class="interview-indicator-inner">
                         <span class="interview-pulse-dot"></span>

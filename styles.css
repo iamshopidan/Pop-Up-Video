@@ -754,6 +754,102 @@ body {
     flex: 1;
 }
 
+/* Interview Resume Upload */
+.interview-resume-upload {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.interview-resume-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.75rem;
+    border: 1.5px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.interview-resume-btn:hover {
+    border-color: #d97706;
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.05);
+}
+
+.interview-resume-btn.has-file {
+    border-style: solid;
+    border-color: #d97706;
+    background: rgba(217, 119, 6, 0.08);
+    color: #d97706;
+}
+
+@media (prefers-color-scheme: dark) {
+    .interview-resume-btn.has-file {
+        background: rgba(217, 119, 6, 0.15);
+        color: #fbbf24;
+        border-color: #fbbf24;
+    }
+}
+
+.resume-btn-icon {
+    font-size: 0.85rem;
+}
+
+.resume-btn-text {
+    font-size: 0.75rem;
+}
+
+.interview-resume-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: var(--bg-card-hover);
+    border-radius: 50%;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+.interview-resume-clear:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.interview-resume-clear[hidden] {
+    display: none;
+}
+
+.interview-resume-status {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+}
+
+.interview-resume-status.extracting {
+    color: #d97706;
+    font-style: normal;
+    font-weight: 500;
+}
+
 /* Category Selector */
 .category-selector {
     margin-bottom: 1rem;
@@ -1638,6 +1734,15 @@ body {
 
 .detection-card.interview-card .streaming-cursor {
     background: #d97706;
+}
+
+/* Resume-based question card */
+.detection-card.resume-card {
+    border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.detection-card.resume-card .interview-focus-tag {
+    background: rgba(217, 119, 6, 0.15);
 }
 
 /* Nothing Notable Card */
