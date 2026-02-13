@@ -14,17 +14,17 @@ const CATEGORIES = {
         icon: '🟢',
         description: 'Shopify-specific jargon and abbreviations'
     },
-    tech: {
-        id: 'tech',
-        name: 'Tech Jargon',
-        icon: '💻',
-        description: 'Programming languages, frameworks, and technical concepts'
-    },
     ecommerce: {
         id: 'ecommerce',
         name: 'Ecommerce',
         icon: '🛒',
         description: 'Fundamental ecommerce terms and concepts'
+    },
+    tech: {
+        id: 'tech',
+        name: 'Tech Jargon',
+        icon: '💻',
+        description: 'Programming languages, frameworks, and technical concepts'
     },
     leadership: {
         id: 'leadership',
