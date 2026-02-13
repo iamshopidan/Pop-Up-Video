@@ -1,5 +1,5 @@
 /**
- * Pop-Up Video - Real-Time Term Detection for Shopify Calls
+ * CONTXT - Real-Time Term Detection & Explanations
  * An onboarding tool for new Shopifolk
  */
 
@@ -803,7 +803,6 @@ const state = {
 // ============================================
 
 const elements = {
-    userGreeting: document.getElementById('userGreeting'),
     statusIndicator: document.getElementById('statusIndicator'),
     statusText: document.getElementById('statusText'),
     transcriptPreview: document.getElementById('transcriptPreview'),
@@ -834,11 +833,7 @@ const elements = {
     testModalCancel: document.getElementById('testModalCancel'),
     testModalSubmit: document.getElementById('testModalSubmit'),
     testTextInput: document.getElementById('testTextInput'),
-    // Persona & mode toggle elements
-    welcomeScreen: document.getElementById('welcomeScreen'),
-    personaBadge: document.getElementById('personaBadge'),
-    personaBadgeIcon: document.getElementById('personaBadgeIcon'),
-    personaBadgeLabel: document.getElementById('personaBadgeLabel'),
+    // Mode toggle elements
     modeToggle: document.getElementById('modeToggle'),
     categorySelector: document.getElementById('categorySelector'),
     contextIndicator: document.getElementById('contextIndicator'),
@@ -931,7 +926,7 @@ function loadSavedCategories() {
 // Persona definitions: which modes are available for each persona
 const PERSONAS = {
     shopify: {
-        label: 'Shopify Context',
+        label: 'Shopify Mode',
         icon: '🟢',
         modes: [
             { id: 'jargon', label: 'Jargon', icon: '📚' },
@@ -950,6 +945,10 @@ const PERSONAS = {
     }
 };
 
+// ============================================
+// Persona Toggle Functions
+// ============================================
+
 function initPersona() {
     // Load saved persona
     const savedPersona = localStorage.getItem('popupvideo_persona');
@@ -967,22 +966,32 @@ function initPersona() {
         state.mode = personaDef.defaultMode;
     }
 
-    // Persona card click handlers on welcome screen
-    document.querySelectorAll('.persona-card').forEach(card => {
-        card.addEventListener('click', () => {
-            selectPersona(card.dataset.persona);
+    // Persona toggle click handlers
+    document.querySelectorAll('.persona-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectPersona(btn.dataset.persona);
         });
     });
 
-    // Persona badge click — go back to persona selection
-    elements.personaBadge.addEventListener('click', showPersonaSelector);
-
-    // Highlight current persona on welcome screen
-    updatePersonaCardHighlight();
+    // Update persona toggle UI
+    updatePersonaToggle();
 
     // Build toggle and apply UI
     buildModeToggle();
     applyModeUI(state.mode);
+}
+
+function updatePersonaToggle() {
+    const personaToggle = document.getElementById('personaToggle');
+    if (!personaToggle) return;
+
+    // Update active class on options
+    document.querySelectorAll('.persona-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.persona === state.persona);
+    });
+
+    // Update slider position
+    personaToggle.classList.toggle('recruiter-active', state.persona === 'recruiter');
 }
 
 function initModeToggle() {
@@ -1055,39 +1064,11 @@ function selectPersona(personaId) {
         if (state.mode === 'interview' && state.isListening) startInterviewTimer();
     }
 
-    updatePersonaCardHighlight();
+    updatePersonaToggle();
     buildModeToggle();
     applyModeUI(state.mode);
-    updatePersonaBadge();
 }
 
-function showPersonaSelector() {
-    // Scroll the welcome screen into view / ensure it's visible
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent) {
-        mainContent.scrollIntoView({ behavior: 'smooth' });
-    }
-    // Briefly pulse the persona cards
-    document.querySelectorAll('.persona-card').forEach(card => {
-        card.style.animation = 'none';
-        requestAnimationFrame(() => {
-            card.style.animation = 'fadeInUp 0.4s ease';
-        });
-    });
-}
-
-function updatePersonaCardHighlight() {
-    document.querySelectorAll('.persona-card').forEach(card => {
-        card.classList.toggle('selected', card.dataset.persona === state.persona);
-    });
-}
-
-function updatePersonaBadge() {
-    const personaDef = PERSONAS[state.persona];
-    elements.personaBadgeIcon.textContent = personaDef.icon;
-    elements.personaBadgeLabel.textContent = personaDef.label;
-    elements.personaBadge.classList.toggle('recruiter-active', state.persona === 'recruiter');
-}
 
 function buildModeToggle() {
     const personaDef = PERSONAS[state.persona];
@@ -1109,8 +1090,6 @@ function buildModeToggle() {
         });
         elements.modeToggle.insertBefore(btn, slider);
     });
-
-    updatePersonaBadge();
 }
 
 function switchMode(newMode) {
@@ -2036,14 +2015,10 @@ async function initQuickAPI() {
             if (identity && identity.name) {
                 const firstName = identity.name.split(' ')[0];
                 state.userName = firstName;
-                elements.userGreeting.querySelector('.greeting-text').textContent = `Hi, ${firstName}!`;
             }
-        } else {
-            elements.userGreeting.querySelector('.greeting-text').textContent = 'Welcome!';
         }
     } catch (error) {
-        console.log('Quick API not available, using fallback greeting');
-        elements.userGreeting.querySelector('.greeting-text').textContent = 'Welcome!';
+        console.log('Quick API not available');
     }
 }
 
@@ -2724,7 +2699,7 @@ function exportToPDF() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Pop-Up Video - Terms Export</title>
+    <title>CONTXT - Terms Export</title>
     <style>
         * {
             box-sizing: border-box;
@@ -2745,12 +2720,12 @@ function exportToPDF() {
             text-align: center;
             margin-bottom: 40px;
             padding-bottom: 20px;
-            border-bottom: 2px solid #008060;
+            border-bottom: 2px solid #1a1f3c;
         }
-        
+
         .header h1 {
             font-size: 28px;
-            color: #008060;
+            color: #1a1f3c;
             margin-bottom: 8px;
         }
         
@@ -2773,7 +2748,7 @@ function exportToPDF() {
         .stat-value {
             font-size: 24px;
             font-weight: 700;
-            color: #008060;
+            color: #1a1f3c;
         }
         
         .stat-label {
@@ -2841,7 +2816,7 @@ function exportToPDF() {
 </head>
 <body>
     <div class="header">
-        <h1>🎬 Pop-Up Video</h1>
+        <h1>CONTXT</h1>
         <p class="subtitle">${dateStr} at ${timeStr}</p>
         <div class="stats">
             <div class="stat">
@@ -2858,7 +2833,7 @@ function exportToPDF() {
     ${termsHTML}
     
     <div class="footer">
-        <p>Generated by Pop-Up Video • popup-video.quick.shopify.io</p>
+        <p>Generated by CONTXT • contxt.quick.shopify.io</p>
     </div>
     
     <script>
@@ -2961,7 +2936,7 @@ function init() {
     `;
     document.head.appendChild(style);
     
-    console.log('Pop-Up Video initialized! 🎬');
+    console.log('CONTXT initialized!');
     console.log(`Loaded ${Object.keys(TERMS).length} terms across ${Object.keys(CATEGORIES).length} categories.`);
 }
 

@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Pop-Up Video - Real-time Shopify abbreviation detection for onboarding">
-    <meta name="theme-color" content="#008060">
-    <title>Pop-Up Video 🎬</title>
+    <meta name="description" content="CONTXT - Real-time term detection and explanations for onboarding">
+    <meta name="theme-color" content="#1a1f3c">
+    <title>CONTXT</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,144 +13,109 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Main content area (left side - for Google Meet) -->
-        <main class="main-content">
-            <div class="welcome-screen" id="welcomeScreen">
-                <img src="logo.jpg" alt="Pop-Up Video" class="welcome-logo">
-                <h1 class="sr-only">Pop-Up Video</h1>
-                <p class="welcome-subtitle">Choose your mode</p>
-                <p class="welcome-description">
-                    Keep this window open alongside your Google Meet call.<br>
-                    Select how you'd like Pop-Up Video to assist you.
-                </p>
-                <div class="persona-grid">
-                    <button class="persona-card persona-shopify" data-persona="shopify">
-                        <div class="persona-card-icon">🟢</div>
-                        <h2 class="persona-card-title">Shopify Context</h2>
-                        <p class="persona-card-desc">Decode Shopify jargon and get real-time context about topics discussed in meetings.</p>
-                        <div class="persona-card-modes">
-                            <span class="persona-mode-tag">📚 Jargon</span>
-                            <span class="persona-mode-tag">✨ Live Context</span>
-                        </div>
-                    </button>
-                    <button class="persona-card persona-recruiter" data-persona="recruiter">
-                        <div class="persona-card-icon">🎯</div>
-                        <h2 class="persona-card-title">Recruiter Mode</h2>
-                        <p class="persona-card-desc">Get suggested follow-up questions and deeper interview insights in real-time.</p>
-                        <div class="persona-card-modes">
-                            <span class="persona-mode-tag">✨ Live Context</span>
-                            <span class="persona-mode-tag">🎯 Interview</span>
-                        </div>
-                    </button>
-                </div>
-            </div>
-        </main>
-
-        <!-- Sidebar for detections -->
+        <!-- Sidebar (single panel for Chrome extension) -->
         <aside class="sidebar">
             <header class="sidebar-header">
                 <div class="header-top">
                     <div class="app-title">
-                        <img src="logo.jpg" alt="Pop-Up Video" class="sidebar-logo">
-                    </div>
-                    <div class="user-greeting" id="userGreeting">
-                        <span class="greeting-text">Loading...</span>
+                        <img src="contxt-logo.png" alt="CONTXT" class="sidebar-logo">
                     </div>
                 </div>
-                
+
+                <div class="persona-toggle-wrapper">
+                    <div class="persona-toggle" id="personaToggle">
+                        <button class="persona-option" data-persona="shopify">
+                            <span class="persona-icon">🟢</span> Shopify Mode
+                        </button>
+                        <button class="persona-option" data-persona="recruiter">
+                            <span class="persona-icon">🎯</span> Recruiter Mode
+                        </button>
+                        <div class="persona-slider"></div>
+                    </div>
+                </div>
+
                 <div class="status-bar">
-                    <div class="status-indicator" id="statusIndicator">
-                        <span class="status-dot"></span>
-                        <span class="status-text" id="statusText">Initializing...</span>
+                        <div class="status-indicator" id="statusIndicator">
+                            <span class="status-dot"></span>
+                            <span class="status-text" id="statusText">Initializing...</span>
+                        </div>
+                        <div class="transcript-preview" id="transcriptPreview"></div>
                     </div>
-                    <div class="transcript-preview" id="transcriptPreview"></div>
-                </div>
 
-                <div class="persona-badge-wrapper" id="personaBadgeWrapper">
-                    <button class="persona-badge" id="personaBadge" title="Switch mode">
-                        <span class="persona-badge-icon" id="personaBadgeIcon">🟢</span>
-                        <span class="persona-badge-label" id="personaBadgeLabel">Shopify Context</span>
-                        <span class="persona-badge-switch">Switch</span>
-                    </button>
-                </div>
-
-                <div class="mode-toggle-wrapper">
-                    <div class="mode-toggle" id="modeToggle">
-                        <!-- Dynamically populated by JS based on persona -->
-                        <div class="mode-slider"></div>
-                    </div>
-                </div>
-
-                <div class="category-selector" id="categorySelector">
-                    <label class="category-label">Categories selected</label>
-                    <div class="category-chips" id="categoryChips">
-                        <!-- Categories will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <div class="context-indicator" id="contextIndicator" style="display: none;">
-                    <div class="context-indicator-inner">
-                        <span class="context-pulse-dot"></span>
-                        <span class="context-indicator-text">Analyzing conversation every ~10s</span>
-                    </div>
-                </div>
-
-                <div class="interview-setup" id="interviewSetup" style="display: none;">
-                    <div class="interview-setup-inner">
-                        <label class="interview-label" for="interviewRole">Role being interviewed</label>
-                        <input type="text" id="interviewRole" class="interview-role-input" placeholder="e.g. Senior Frontend Developer" autocomplete="off">
-                        <label class="interview-label" for="interviewFocus">Interview focus</label>
-                        <select id="interviewFocus" class="interview-focus-select">
-                            <option value="general">General</option>
-                            <option value="behavioral">Behavioral</option>
-                            <option value="technical">Technical</option>
-                            <option value="culture">Culture Fit</option>
-                        </select>
-                        <label class="interview-label" for="interviewResume">Candidate resume (optional)</label>
-                        <div class="interview-resume-upload" id="interviewResumeUpload">
-                            <input type="file" id="interviewResume" accept=".pdf,.txt" hidden>
-                            <button type="button" class="interview-resume-btn" id="interviewResumeBtn">
-                                <span class="resume-btn-icon">📄</span>
-                                <span class="resume-btn-text">Upload Resume</span>
-                            </button>
-                            <button type="button" class="interview-resume-clear" id="interviewResumeClear" hidden title="Remove resume">&times;</button>
-                            <span class="interview-resume-status" id="interviewResumeStatus"></span>
+                    <div class="mode-toggle-wrapper">
+                        <div class="mode-toggle" id="modeToggle">
+                            <!-- Dynamically populated by JS based on persona -->
+                            <div class="mode-slider"></div>
                         </div>
                     </div>
-                    <div class="interview-indicator-inner">
-                        <span class="interview-pulse-dot"></span>
-                        <span class="interview-indicator-text">Suggesting follow-up questions every ~12s</span>
+
+                    <div class="category-selector" id="categorySelector">
+                        <label class="category-label">Categories selected</label>
+                        <div class="category-chips" id="categoryChips">
+                            <!-- Categories will be populated by JavaScript -->
+                        </div>
                     </div>
-                </div>
 
-                <div class="controls">
-                    <button class="btn btn-primary" id="toggleBtn" disabled>
-                        <span class="btn-icon" id="toggleIcon">▶</span>
-                        <span id="toggleText">Start Listening</span>
-                    </button>
-                </div>
-                <div class="controls controls-secondary">
-                    <button class="btn btn-secondary" id="exportBtn" title="Export to PDF">
-                        <span class="btn-icon">📄</span>
-                        <span class="btn-label">Export</span>
-                    </button>
-                    <button class="btn btn-secondary" id="clearBtn" title="Clear history">
-                        <span class="btn-icon">🗑</span>
-                        <span class="btn-label">Clear</span>
-                    </button>
-                    <button class="btn btn-secondary" id="testToggleBtn" title="Toggle test input">
-                        <span class="btn-icon">🧪</span>
-                        <span class="btn-label">Test</span>
-                    </button>
-                </div>
+                    <div class="context-indicator" id="contextIndicator" style="display: none;">
+                        <div class="context-indicator-inner">
+                            <span class="context-pulse-dot"></span>
+                            <span class="context-indicator-text">Analyzing conversation every ~10s</span>
+                        </div>
+                    </div>
 
-                <div class="test-input-wrapper" id="testInputWrapper" style="display: none;">
-                    <form id="testInputForm" class="test-input-form">
-                        <input type="text" id="testInput" class="test-input" placeholder="Type to simulate speech..." autocomplete="off">
-                        <button type="submit" class="btn btn-test" title="Send">↵</button>
-                    </form>
-                </div>
-            </header>
+                    <div class="interview-setup" id="interviewSetup" style="display: none;">
+                        <div class="interview-setup-inner">
+                            <label class="interview-label" for="interviewRole">Role being interviewed</label>
+                            <input type="text" id="interviewRole" class="interview-role-input" placeholder="e.g. Senior Frontend Developer" autocomplete="off">
+                            <label class="interview-label" for="interviewFocus">Interview focus</label>
+                            <select id="interviewFocus" class="interview-focus-select">
+                                <option value="general">General</option>
+                                <option value="behavioral">Behavioral</option>
+                                <option value="technical">Technical</option>
+                                <option value="culture">Culture Fit</option>
+                            </select>
+                            <label class="interview-label" for="interviewResume">Candidate resume (optional)</label>
+                            <div class="interview-resume-upload" id="interviewResumeUpload">
+                                <input type="file" id="interviewResume" accept=".pdf,.txt" hidden>
+                                <button type="button" class="interview-resume-btn" id="interviewResumeBtn">
+                                    <span class="resume-btn-icon">📄</span>
+                                    <span class="resume-btn-text">Upload Resume</span>
+                                </button>
+                                <button type="button" class="interview-resume-clear" id="interviewResumeClear" hidden title="Remove resume">&times;</button>
+                                <span class="interview-resume-status" id="interviewResumeStatus"></span>
+                            </div>
+                        </div>
+                        <div class="interview-indicator-inner">
+                            <span class="interview-pulse-dot"></span>
+                            <span class="interview-indicator-text">Suggesting follow-up questions every ~12s</span>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <button class="btn btn-primary" id="toggleBtn" disabled>
+                            <span class="btn-icon" id="toggleIcon">▶</span>
+                            <span id="toggleText">Start Listening</span>
+                        </button>
+                    </div>
+                    <div class="controls controls-secondary">
+                        <button class="btn btn-icon-only" id="exportBtn" data-tooltip="Export">
+                            <span class="btn-icon">📄</span>
+                        </button>
+                        <button class="btn btn-icon-only" id="clearBtn" data-tooltip="Clear">
+                            <span class="btn-icon">🗑</span>
+                        </button>
+                        <button class="btn btn-icon-only" id="testToggleBtn" data-tooltip="Test">
+                            <span class="btn-icon">🧪</span>
+                        </button>
+                    </div>
+
+                    <div class="test-input-wrapper" id="testInputWrapper" style="display: none;">
+                        <form id="testInputForm" class="test-input-form">
+                            <input type="text" id="testInput" class="test-input" placeholder="Type to simulate speech..." autocomplete="off">
+                            <button type="submit" class="btn btn-test" title="Send">↵</button>
+                        </form>
+                    </div>
+                </header>
 
             <div class="detection-feed" id="detectionFeed">
                 <div class="empty-state" id="emptyState">
