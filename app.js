@@ -1130,16 +1130,20 @@ function applyModeUI(mode) {
     });
 
     // Slide the pill — position based on index (always 2 options now)
-    elements.modeToggle.classList.remove('right-active', 'slider-jargon', 'slider-context', 'slider-interview');
+    elements.modeToggle.classList.remove('right-active', 'persona-shopify', 'persona-recruiter');
     if (modeIndex === 1) {
         elements.modeToggle.classList.add('right-active');
     }
-    elements.modeToggle.classList.add(`slider-${mode}`);
+    elements.modeToggle.classList.add(`persona-${state.persona}`);
 
     // Show/hide mode-specific panels
     elements.categorySelector.style.display = mode === 'jargon' ? 'block' : 'none';
     elements.contextIndicator.style.display = mode === 'context' ? 'block' : 'none';
     elements.interviewSetup.style.display = mode === 'interview' ? 'block' : 'none';
+
+    // Update Start Listening button color based on persona
+    elements.toggleBtn.classList.remove('persona-shopify', 'persona-recruiter');
+    elements.toggleBtn.classList.add(`persona-${state.persona}`);
 }
 
 // ============================================

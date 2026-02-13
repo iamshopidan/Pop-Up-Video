@@ -237,7 +237,7 @@ body {
 
 .persona-toggle.recruiter-active .persona-slider {
     transform: translateX(100%);
-    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
 }
 
 /* Sidebar Header */
@@ -391,16 +391,14 @@ body {
 }
 
 /* Color variants for slider based on active mode */
-.mode-toggle.slider-context .mode-slider {
-    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
-}
-
-.mode-toggle.slider-interview .mode-slider {
-    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-}
-
-.mode-toggle.slider-jargon .mode-slider {
+/* Shopify persona - navy blue for all modes */
+.mode-toggle.persona-shopify .mode-slider {
     background: linear-gradient(135deg, var(--contxt-navy) 0%, var(--contxt-navy-dark) 100%);
+}
+
+/* Recruiter persona - purple for all modes */
+.mode-toggle.persona-recruiter .mode-slider {
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
 }
 
 .mode-icon {
@@ -520,27 +518,19 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
-    background: rgba(217, 119, 6, 0.08);
-    border: 1px solid rgba(217, 119, 6, 0.2);
+    background: rgba(124, 58, 237, 0.15);
+    border: 1px solid rgba(124, 58, 237, 0.3);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
-    color: #d97706;
+    color: var(--text-primary);
     font-weight: 500;
-}
-
-@media (prefers-color-scheme: dark) {
-    .interview-indicator-inner {
-        background: rgba(217, 119, 6, 0.15);
-        border-color: rgba(217, 119, 6, 0.3);
-        color: #fbbf24;
-    }
 }
 
 .interview-pulse-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #d97706;
+    background: #7c3aed;
     flex-shrink: 0;
     animation: interviewPulse 2s infinite;
 }
@@ -846,9 +836,17 @@ body {
     color: white;
 }
 
+.btn-primary.persona-recruiter {
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+}
+
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(26, 31, 60, 0.4);
+}
+
+.btn-primary.persona-recruiter:hover:not(:disabled) {
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
 }
 
 .btn-primary:active:not(:disabled) {
