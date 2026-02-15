@@ -1,17 +1,19 @@
-# Pop-Up Video 🎬
+# CONTXT
 
-**Real-Time Abbreviation Detection for Shopify Calls**
+**Real-time AI-powered meeting companion for Shopify**
 
-An onboarding tool for new Shopifolk that listens to audio from Google Meet calls and displays real-time definitions when Shopify abbreviations are detected.
+A Chrome extension that listens to your calls, videos, and any browser audio to provide real-time context — detecting Shopify jargon, surfacing conversation insights, and suggesting interview questions. Works with Google Meet, YouTube, Loom, and any tab playing audio. Built for onboarding new Shopifolk and helping recruiters during interviews.
 
 ## Features
 
-- 🎤 **Live Audio Detection** - Continuous speech recognition using the Web Speech API
-- 📚 **200+ Shopify Terms** - Comprehensive dictionary of Shopify abbreviations and jargon
-- 🔒 **Privacy First** - All audio is processed locally, nothing is sent to servers
-- ⚡ **Real-time Results** - Instant detection and display of recognized terms
+- 🎤 **Dual Audio Capture** - Mic input via Web Speech API + tab audio via Whisper transcription for full conversation coverage
+- 📚 **200+ Shopify Terms** - Comprehensive dictionary across Shopify, ecommerce, tech, and leadership categories
+- 🧠 **Context Mode** - AI-powered conversation analysis that surfaces relevant insights every ~10 seconds
+- 🎯 **Interview Mode** - Generates follow-up questions based on live conversation and uploaded resumes
+- 👥 **Persona Modes** - Switch between Shopify (onboarding) and Recruiter (interviewing) workflows
+- 🔍 **Term Deep Dive** - Click any detected term for an AI-generated detailed explanation
+- 📄 **PDF Export** - Export detected terms and insights for later reference
 - 🌓 **Light/Dark Mode** - Automatically respects your system preference
-- 👤 **Personalized Greeting** - Uses Quick Identity API to greet you by name
 
 ## Quick Start
 
@@ -24,6 +26,18 @@ An onboarding tool for new Shopifolk that listens to audio from Google Meet call
 ### Local Development
 
 Simply open `index.html` in Chrome or Edge. The Quick API features will gracefully fall back when not deployed to Quick.
+
+### Chrome Extension
+
+1. Open Chrome and navigate to `chrome://extensions`
+2. Enable **Developer mode** (toggle in the top-right corner)
+3. Click **Load unpacked**
+4. Select the `extension/` folder from this project
+5. The CONTXT icon will appear in your Chrome toolbar
+6. Click the icon on any webpage to open the side panel
+7. Click **Start Listening** to begin detecting terms
+
+To reload after making changes, go back to `chrome://extensions` and click the refresh icon on the CONTXT card.
 
 ### Deployment to Quick
 

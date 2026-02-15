@@ -1,5 +1,5 @@
 /* ============================================
-   CONTXT - Styles
+   CONTXT - Chrome Extension Side Panel Styles
    Real-time Term Detection & Explanations
    ============================================ */
 
@@ -11,7 +11,7 @@
     --contxt-navy-light: #2d3561;
     --contxt-gradient: linear-gradient(135deg, #7c3aed 0%, #ec4899 50%, #06b6d4 100%);
     --contxt-gradient-subtle: linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%);
-    
+
     /* Light mode (default) */
     --bg-primary: #f9fafb;
     --bg-secondary: #ffffff;
@@ -28,12 +28,12 @@
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
     --gradient-bg: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 50%, #f0faff 100%);
     --card-gradient: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-    
+
     /* Animation */
     --transition-fast: 150ms ease;
     --transition-base: 250ms ease;
     --transition-slow: 400ms ease;
-    
+
     /* Spacing */
     --sidebar-width: 340px;
     --header-height: 180px;
@@ -173,7 +173,6 @@ body {
     flex-direction: column;
     z-index: 100;
 }
-
 
 /* Persona Toggle */
 .persona-toggle-wrapper {
@@ -401,7 +400,6 @@ body {
     transform: translateX(100%);
 }
 
-/* Color variants for slider based on active mode */
 /* Shopify persona - navy blue for all modes */
 .mode-toggle.persona-shopify .mode-slider {
     background: linear-gradient(135deg, var(--contxt-navy) 0%, var(--contxt-navy-dark) 100%);
@@ -414,6 +412,51 @@ body {
 
 .mode-icon {
     font-size: 0.85rem;
+}
+
+/* Audio Source Selector */
+.audio-source-selector {
+    margin-bottom: 1rem;
+}
+
+.source-toggle {
+    display: flex;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.source-btn {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.source-btn:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+
+.source-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-card-hover);
+}
+
+.source-btn.selected {
+    background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%);
+    color: white;
+}
+
+.source-btn.selected:hover {
+    opacity: 0.9;
 }
 
 /* Context Mode Indicator */
@@ -1776,7 +1819,7 @@ body {
         --border-color: currentColor;
         --border-light: currentColor;
     }
-    
+
     .detection-card {
         border-width: 2px;
     }
@@ -1790,4 +1833,3 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
-
