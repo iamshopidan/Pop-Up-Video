@@ -1,6 +1,6 @@
 /**
- * CONTXT - Real-Time Term Detection & Explanations
- * An onboarding tool for new Shopifolk
+ * CONTXT - Chrome Extension Side Panel
+ * Real-Time Term Detection, Live Context & Interview Assistance
  */
 
 // ============================================
@@ -11,25 +11,25 @@ const CATEGORIES = {
     shopify: {
         id: 'shopify',
         name: 'Shopify Terms',
-        icon: '🟢',
+        icon: '\u{1F7E2}',
         description: 'Shopify-specific jargon and abbreviations'
     },
     ecommerce: {
         id: 'ecommerce',
         name: 'Ecommerce',
-        icon: '🛒',
+        icon: '\u{1F6D2}',
         description: 'Fundamental ecommerce terms and concepts'
     },
     tech: {
         id: 'tech',
         name: 'Tech Jargon',
-        icon: '💻',
+        icon: '\u{1F4BB}',
         description: 'Programming languages, frameworks, and technical concepts'
     },
     leadership: {
         id: 'leadership',
         name: 'Leadership',
-        icon: '👔',
+        icon: '\u{1F454}',
         description: 'Shopify Executive Leadership Team'
     }
 };
@@ -191,8 +191,8 @@ const TERMS = {
     // ==========================================
     // SHOPIFY EXECUTIVE LEADERSHIP
     // ==========================================
-    "Tobi": { definition: "Tobi Lütke - CEO & Head of R&D", category: "leadership" },
-    "Toby": { definition: "Tobi Lütke - CEO & Head of R&D", category: "leadership" },
+    "Tobi": { definition: "Tobi L\u00FCtke - CEO & Head of R&D", category: "leadership" },
+    "Toby": { definition: "Tobi L\u00FCtke - CEO & Head of R&D", category: "leadership" },
     "Harley": { definition: "Harley Finkelstein - President", category: "leadership" },
     "Mikhail": { definition: "Mikhail Parakhin - Chief Technology Officer (CTO)", category: "leadership" },
     "Carl": { definition: "Carl Rivera - Chief Design Officer (CDO)", category: "leadership" },
@@ -206,10 +206,8 @@ const TERMS = {
     // ECOMMERCE TERMS
     // ==========================================
     "3PL": { definition: "Third party logistics - The outsourcing of ecommerce logistics processes to a third party business, including inventory management, warehousing, and fulfillment", category: "ecommerce" },
-    "AOV": { definition: "Average Order Value - Tracks the average dollar amount spent each time a customer places an order on a website or app", category: "ecommerce" },
     "B2B": { definition: "Business to Business - A business relationship in which businesses provide products or services to other businesses", category: "ecommerce" },
     "B2C": { definition: "Business to Consumer - A business relationship in which businesses provide products or services to individual consumers", category: "ecommerce" },
-    "BOPIS": { definition: "Buy Online, Pickup In Store - A retail strategy allowing customers to purchase online and collect at a physical location", category: "ecommerce" },
     "Bounce rate": { definition: "The percentage of people who leave after viewing a single page", category: "ecommerce" },
     "C2C": { definition: "Customer to Customer - A business relationship that fosters commerce between private individuals", category: "ecommerce" },
     "C2B": { definition: "Consumer to Business - A business relationship in which a consumer or end user provides a product or service to an organization", category: "ecommerce" },
@@ -518,7 +516,6 @@ const TERMS = {
     "SSO": { definition: "Authentication - Single Sign-On allowing login with single credentials", category: "tech" },
     "2FA": { definition: "Security - Two-Factor Authentication requiring two verification factors", category: "tech" },
     "HTTPS": { definition: "Protocol - Secure HTTP using SSL/TLS encryption", category: "tech" },
-    "SSL": { definition: "Security Protocol - Secure Socket Layer for secure communication", category: "tech" },
     "TLS": { definition: "Security Protocol - Transport Layer Security for secure communication", category: "tech" },
     "API Key": { definition: "Authentication - Simple token for identifying and authenticating API requests", category: "tech" },
     "CORS": { definition: "Security - Cross-Origin Resource Sharing for restricted resource requests", category: "tech" },
@@ -766,34 +763,84 @@ Object.keys(TERMS).forEach(key => {
 });
 
 // ============================================
+// Quick AI base URL (for OpenAI proxy & Whisper)
+// ============================================
+
+const QUICK_AI_BASE = 'https://popup-video.quick.shopify.io/api/ai';
+
+// ============================================
+// Streaming Chat Completions (replaces OpenAI SDK)
+// ============================================
+
+async function* streamChatCompletion({ model, messages, temperature, max_tokens }) {
+    const response = await fetch(`${QUICK_AI_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ model, messages, temperature, max_tokens, stream: true })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Chat API error: ${response.status} ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) yield content;
+            } catch (e) {
+                // skip unparseable chunks
+            }
+        }
+    }
+}
+
+// ============================================
 // Application State
 // ============================================
 
 const state = {
     isListening: false,
+    tabCaptureActive: false,
+    audioSource: 'both', // 'mic', 'tab', or 'both'
     recognition: null,
     detections: [],
     recentDetections: new Map(),
     totalDetections: 0,
     userName: null,
-    selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']), // Default: all selected
+    selectedCategories: new Set(['shopify', 'tech', 'ecommerce', 'leadership']),
     // Persona & mode
-    persona: 'shopify', // 'shopify' or 'recruiter'
-    mode: 'jargon', // 'jargon', 'context', or 'interview'
+    persona: 'shopify',
+    mode: 'jargon',
     // Live Context mode
     transcriptBuffer: '',
     contextTimer: null,
     contextCallInProgress: false,
-    surfacedTopics: new Set(), // Avoid repeating the same topics
-    openaiClient: null,
+    surfacedTopics: new Set(),
     // Interview mode
     interviewRole: '',
     interviewFocus: 'general',
-    interviewTranscriptHistory: [], // Rolling window of recent transcript chunks
-    interviewSuggestedQuestions: new Set(), // Avoid repeating questions
+    interviewTranscriptHistory: [],
+    interviewSuggestedQuestions: new Set(),
     interviewTimer: null,
     interviewCallInProgress: false,
-    // Interview resume
     interviewResumeText: '',
     interviewResumeFileName: '',
     // Custom context
@@ -820,7 +867,8 @@ const elements = {
     categoryChips: document.getElementById('categoryChips'),
     categoryToggle: document.getElementById('categoryToggle'),
     exportBtn: document.getElementById('exportBtn'),
-    // Term detail modal elements
+    sourceToggle: document.getElementById('sourceToggle'),
+    // Term detail modal
     termModal: document.getElementById('termModal'),
     termModalOverlay: document.getElementById('termModalOverlay'),
     termModalClose: document.getElementById('termModalClose'),
@@ -828,24 +876,22 @@ const elements = {
     termModalCategory: document.getElementById('termModalCategory'),
     termModalBrief: document.getElementById('termModalBrief'),
     termModalBody: document.getElementById('termModalBody'),
-    // Test input modal elements
-    testBtn: document.getElementById('testBtn'),
+    // Test input modal
     testModal: document.getElementById('testModal'),
     testModalOverlay: document.getElementById('testModalOverlay'),
     testModalClose: document.getElementById('testModalClose'),
     testModalCancel: document.getElementById('testModalCancel'),
     testModalSubmit: document.getElementById('testModalSubmit'),
     testTextInput: document.getElementById('testTextInput'),
-    // Mode toggle elements
+    // Mode toggle
     modeToggle: document.getElementById('modeToggle'),
     categorySelector: document.getElementById('categorySelector'),
     contextIndicator: document.getElementById('contextIndicator'),
-    // Interview mode elements
+    // Interview mode
     interviewSetup: document.getElementById('interviewSetup'),
     interviewToggle: document.getElementById('interviewToggle'),
     interviewRole: document.getElementById('interviewRole'),
     interviewFocus: document.getElementById('interviewFocus'),
-    // Interview resume elements
     interviewResume: document.getElementById('interviewResume'),
     interviewResumeBtn: document.getElementById('interviewResumeBtn'),
     interviewResumeClear: document.getElementById('interviewResumeClear'),
@@ -866,7 +912,7 @@ function getTermCountByCategory(categoryId) {
 function renderCategoryChips() {
     const container = elements.categoryChips;
     container.innerHTML = '';
-    
+
     Object.values(CATEGORIES).forEach(category => {
         const count = getTermCountByCategory(category.id);
         const isSelected = state.selectedCategories.has(category.id);
@@ -877,7 +923,7 @@ function renderCategoryChips() {
             ? '<img src="shopify.svg" alt="" class="chip-icon-img">'
             : `<span class="chip-icon">${category.icon}</span>`;
         chip.innerHTML = `
-            <span class="chip-status">${isSelected ? '✓' : '✕'}</span>
+            <span class="chip-status">${isSelected ? '\u2713' : '\u2715'}</span>
             ${iconHtml}
             <span class="chip-name">${category.name}</span>
             <span class="chip-count">(${count})</span>
@@ -889,11 +935,9 @@ function renderCategoryChips() {
 
 function toggleCategory(categoryId) {
     if (state.selectedCategories.has(categoryId)) {
-        // Don't allow deselecting if it's the last one
         if (state.selectedCategories.size > 1) {
             state.selectedCategories.delete(categoryId);
         } else {
-            // Show warning or shake animation
             const chip = document.querySelector(`[data-category="${categoryId}"]`);
             chip.style.animation = 'shake 0.3s ease';
             setTimeout(() => chip.style.animation = '', 300);
@@ -902,16 +946,14 @@ function toggleCategory(categoryId) {
     } else {
         state.selectedCategories.add(categoryId);
     }
-    
-    // Update UI
+
     document.querySelectorAll('.category-chip').forEach(chip => {
         const id = chip.dataset.category;
         const isSelected = state.selectedCategories.has(id);
         chip.classList.toggle('selected', isSelected);
-        chip.querySelector('.chip-status').textContent = isSelected ? '✓' : '✕';
+        chip.querySelector('.chip-status').textContent = isSelected ? '\u2713' : '\u2715';
     });
-    
-    // Save to localStorage
+
     localStorage.setItem('popupvideo_categories', JSON.stringify([...state.selectedCategories]));
 }
 
@@ -930,10 +972,9 @@ function loadSavedCategories() {
 }
 
 // ============================================
-// Mode Management
+// Persona Definitions
 // ============================================
 
-// Persona definitions: which modes are available for each persona
 const PERSONAS = {
     shopify: {
         label: 'Shopify Mode',
@@ -956,17 +997,73 @@ const PERSONAS = {
 };
 
 // ============================================
-// Persona Toggle Functions
+// Audio Source Selector
+// ============================================
+
+function initAudioSourceSelector() {
+    const saved = localStorage.getItem('popupvideo_audio_source');
+    if (saved && ['mic', 'tab', 'both'].includes(saved)) {
+        state.audioSource = saved;
+    }
+    updateSourceToggleUI();
+
+    elements.sourceToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('.source-btn');
+        if (!btn) return;
+
+        const source = btn.dataset.source;
+        if (source === state.audioSource) return;
+
+        const wasActive = state.isListening || state.tabCaptureActive;
+        state.audioSource = source;
+        localStorage.setItem('popupvideo_audio_source', source);
+        updateSourceToggleUI();
+
+        const nowUsesTab = source === 'tab' || source === 'both';
+        if (!nowUsesTab && state.tabCaptureActive) {
+            chrome.runtime.sendMessage({ type: 'stop-tab-capture' });
+        }
+
+        const nowUsesMic = source === 'mic' || source === 'both';
+        if (!nowUsesMic && state.isListening) {
+            state.isListening = false;
+            if (state.recognition) {
+                state.recognition.stop();
+            }
+        }
+
+        if (wasActive) {
+            if (nowUsesMic && !state.isListening) {
+                ensureMicPermission().then(() => {
+                    try {
+                        state.isListening = true;
+                        state.recognition.start();
+                    } catch (e) { /* already started */ }
+                });
+            }
+            if (nowUsesTab && !state.tabCaptureActive) {
+                chrome.runtime.sendMessage({ type: 'start-tab-capture' });
+            }
+        }
+    });
+}
+
+function updateSourceToggleUI() {
+    elements.sourceToggle.querySelectorAll('.source-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.source === state.audioSource);
+    });
+}
+
+// ============================================
+// Persona & Mode Management
 // ============================================
 
 function initPersona() {
-    // Load saved persona
     const savedPersona = localStorage.getItem('popupvideo_persona');
     if (savedPersona && PERSONAS[savedPersona]) {
         state.persona = savedPersona;
     }
 
-    // Load saved mode (validate it belongs to this persona)
     const savedMode = localStorage.getItem('popupvideo_mode');
     const personaDef = PERSONAS[state.persona];
     const validModes = personaDef.modes.map(m => m.id);
@@ -976,17 +1073,13 @@ function initPersona() {
         state.mode = personaDef.defaultMode;
     }
 
-    // Persona toggle click handlers
     document.querySelectorAll('.persona-option').forEach(btn => {
         btn.addEventListener('click', () => {
             selectPersona(btn.dataset.persona);
         });
     });
 
-    // Update persona toggle UI
     updatePersonaToggle();
-
-    // Build toggle and apply UI
     buildModeToggle();
     applyModeUI(state.mode);
 }
@@ -995,17 +1088,41 @@ function updatePersonaToggle() {
     const personaToggle = document.getElementById('personaToggle');
     if (!personaToggle) return;
 
-    // Update active class on options
     document.querySelectorAll('.persona-option').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.persona === state.persona);
     });
 
-    // Update slider position
     personaToggle.classList.toggle('recruiter-active', state.persona === 'recruiter');
 }
 
+function selectPersona(personaId) {
+    if (!PERSONAS[personaId]) return;
+    const oldMode = state.mode;
+    state.persona = personaId;
+    localStorage.setItem('popupvideo_persona', personaId);
+
+    const personaDef = PERSONAS[personaId];
+    const validModes = personaDef.modes.map(m => m.id);
+
+    if (!validModes.includes(state.mode)) {
+        if (oldMode === 'context') stopContextTimer();
+        if (oldMode === 'interview') stopInterviewTimer();
+        state.transcriptBuffer = '';
+
+        state.mode = personaDef.defaultMode;
+        localStorage.setItem('popupvideo_mode', state.mode);
+
+        const isActive = state.isListening || state.tabCaptureActive;
+        if (state.mode === 'context' && isActive) startContextTimer();
+        if (state.mode === 'interview' && isActive) startInterviewTimer();
+    }
+
+    updatePersonaToggle();
+    buildModeToggle();
+    applyModeUI(state.mode);
+}
+
 function initModeToggle() {
-    // Load saved interview settings
     const savedRole = localStorage.getItem('popupvideo_interview_role');
     const savedFocus = localStorage.getItem('popupvideo_interview_focus');
     if (savedRole) {
@@ -1017,35 +1134,27 @@ function initModeToggle() {
         elements.interviewFocus.value = savedFocus;
     }
 
-    // Restore resume from sessionStorage if present
     restoreResumeFromSession();
 
-    // Interview role input listener
     elements.interviewRole.addEventListener('input', (e) => {
         state.interviewRole = e.target.value;
         localStorage.setItem('popupvideo_interview_role', e.target.value);
     });
 
-    // Interview focus select listener
     elements.interviewFocus.addEventListener('change', (e) => {
         state.interviewFocus = e.target.value;
         localStorage.setItem('popupvideo_interview_focus', e.target.value);
     });
 
-    // Resume upload — button click triggers hidden file input
     elements.interviewResumeBtn.addEventListener('click', () => {
         elements.interviewResume.click();
     });
 
-    // Resume file selected
     elements.interviewResume.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-            handleResumeUpload(file);
-        }
+        if (file) handleResumeUpload(file);
     });
 
-    // Resume clear button
     elements.interviewResumeClear.addEventListener('click', clearResume);
 
     // Custom context setup
@@ -1061,45 +1170,12 @@ function initModeToggle() {
     });
 }
 
-function selectPersona(personaId) {
-    if (!PERSONAS[personaId]) return;
-    const oldMode = state.mode;
-    state.persona = personaId;
-    localStorage.setItem('popupvideo_persona', personaId);
-
-    // Set default mode for the new persona
-    const personaDef = PERSONAS[personaId];
-    const validModes = personaDef.modes.map(m => m.id);
-
-    // If current mode isn't valid for this persona, switch to default
-    if (!validModes.includes(state.mode)) {
-        // Stop any running timers from old mode
-        if (oldMode === 'context') stopContextTimer();
-        if (oldMode === 'interview') stopInterviewTimer();
-        state.transcriptBuffer = '';
-
-        state.mode = personaDef.defaultMode;
-        localStorage.setItem('popupvideo_mode', state.mode);
-
-        // Start timer if needed
-        if (state.mode === 'context' && state.isListening) startContextTimer();
-        if (state.mode === 'interview' && state.isListening) startInterviewTimer();
-    }
-
-    updatePersonaToggle();
-    buildModeToggle();
-    applyModeUI(state.mode);
-}
-
-
 function buildModeToggle() {
     const personaDef = PERSONAS[state.persona];
     const slider = elements.modeToggle.querySelector('.mode-slider');
 
-    // Remove existing buttons
     elements.modeToggle.querySelectorAll('.mode-option').forEach(btn => btn.remove());
 
-    // Create new buttons
     personaDef.modes.forEach(modeDef => {
         const btn = document.createElement('button');
         btn.className = 'mode-option';
@@ -1119,24 +1195,13 @@ function switchMode(newMode) {
     state.mode = newMode;
     localStorage.setItem('popupvideo_mode', newMode);
 
-    // Stop timers when leaving LLM modes
-    if (oldMode === 'context') {
-        stopContextTimer();
-    }
-    if (oldMode === 'interview') {
-        stopInterviewTimer();
-    }
-
-    // Clear transcript buffer on mode switch
+    if (oldMode === 'context') stopContextTimer();
+    if (oldMode === 'interview') stopInterviewTimer();
     state.transcriptBuffer = '';
 
-    // Start appropriate timer if entering an LLM mode and already listening
-    if (newMode === 'context' && state.isListening) {
-        startContextTimer();
-    }
-    if (newMode === 'interview' && state.isListening) {
-        startInterviewTimer();
-    }
+    const isActive = state.isListening || state.tabCaptureActive;
+    if (newMode === 'context' && isActive) startContextTimer();
+    if (newMode === 'interview' && isActive) startInterviewTimer();
 
     applyModeUI(newMode);
 }
@@ -1145,20 +1210,17 @@ function applyModeUI(mode) {
     const personaDef = PERSONAS[state.persona];
     const modeIndex = personaDef.modes.findIndex(m => m.id === mode);
 
-    // Update toggle active states
     const options = elements.modeToggle.querySelectorAll('.mode-option');
     options.forEach(opt => {
         opt.classList.toggle('active', opt.dataset.mode === mode);
     });
 
-    // Slide the pill — position based on index (always 2 options now)
     elements.modeToggle.classList.remove('right-active', 'persona-shopify', 'persona-recruiter');
     if (modeIndex === 1) {
         elements.modeToggle.classList.add('right-active');
     }
     elements.modeToggle.classList.add(`persona-${state.persona}`);
 
-    // Show/hide mode-specific panels
     elements.categorySelector.style.display = mode === 'jargon' ? 'block' : 'none';
     elements.contextIndicator.style.display = mode === 'context' ? 'block' : 'none';
     elements.interviewSetup.style.display = mode === 'interview' ? 'block' : 'none';
@@ -1176,64 +1238,40 @@ function applyModeUI(mode) {
 // Live Context - LLM Integration
 // ============================================
 
-const CONTEXT_INTERVAL_MS = 10000; // 10 seconds
-const MIN_BUFFER_LENGTH = 20; // Minimum characters before calling LLM
+const CONTEXT_INTERVAL_MS = 10000;
+const MIN_BUFFER_LENGTH = 20;
 
-async function initOpenAIClient() {
-    try {
-        const OpenAI = (await import('https://cdn.jsdelivr.net/npm/openai/+esm')).default;
-        state.openaiClient = new OpenAI({
-            baseURL: `${window.location.origin}/api/ai`,
-            apiKey: 'not-needed',
-            dangerouslyAllowBrowser: true
-        });
-        console.log('OpenAI client initialized for Live Context mode');
-    } catch (err) {
-        console.error('Failed to initialize OpenAI client:', err);
-    }
-}
+// OpenAI client no longer needed — using streamChatCompletion() directly
 
 function startContextTimer() {
-    if (state.contextTimer) return; // Already running
+    if (state.contextTimer) return;
     state.contextTimer = setInterval(() => {
-        if (state.mode === 'context' && state.isListening && !state.contextCallInProgress) {
+        if (state.mode === 'context' && (state.isListening || state.tabCaptureActive) && !state.contextCallInProgress) {
             processTranscriptBuffer();
         }
     }, CONTEXT_INTERVAL_MS);
-    console.log('Context timer started');
 }
 
 function stopContextTimer() {
     if (state.contextTimer) {
         clearInterval(state.contextTimer);
         state.contextTimer = null;
-        console.log('Context timer stopped');
     }
 }
 
 async function processTranscriptBuffer() {
     const buffer = state.transcriptBuffer.trim();
-    console.log(`[Context] Buffer check — length: ${buffer.length}, min: ${MIN_BUFFER_LENGTH}`);
-    if (buffer.length < MIN_BUFFER_LENGTH) {
-        console.log('[Context] Buffer too short, skipping');
-        return;
-    }
+    if (buffer.length < MIN_BUFFER_LENGTH) return;
 
-    console.log(`[Context] Processing buffer: "${buffer.substring(0, 80)}..."`);
-
-    // Clear the buffer immediately so new speech accumulates fresh
     state.transcriptBuffer = '';
     state.contextCallInProgress = true;
 
-    // Show loading indicator
     const loader = showContextLoading();
 
     try {
         await callLLMForContext(buffer);
-        console.log('[Context] LLM call completed successfully');
     } catch (err) {
-        console.error('[Context] LLM call FAILED:', err);
-        // On error, show a nothing-notable card so the user sees feedback
+        console.error('[Context] LLM call failed:', err);
         showNothingNotableCard();
     } finally {
         state.contextCallInProgress = false;
@@ -1276,13 +1314,6 @@ function isNothingNotable(text) {
 }
 
 async function callLLMForContext(transcript) {
-    if (!state.openaiClient) {
-        console.error('[Context] OpenAI client not initialized!');
-        throw new Error('OpenAI client not ready');
-    }
-
-    console.log('[Context] Sending to LLM...');
-
     const topicsList = state.surfacedTopics.size > 0
         ? `\n\nTopics already covered (do NOT repeat these): ${[...state.surfacedTopics].join(', ')}`
         : '';
@@ -1311,76 +1342,42 @@ Important rules:
         { role: 'user', content: `Here's what was just said in the conversation:\n\n"${transcript}"` }
     ];
 
-    let stream;
-    try {
-        stream = await state.openaiClient.chat.completions.create({
-            model: 'gpt-4o',
-            messages: messages,
-            temperature: 0.8,
-            max_tokens: 500,
-            stream: true
-        });
-        console.log('[Context] Stream created successfully');
-    } catch (err) {
-        console.error('[Context] Failed to create stream:', err);
-        throw err;
-    }
+    const stream = streamChatCompletion({
+        model: 'gpt-4o',
+        messages,
+        temperature: 0.8,
+        max_tokens: 500
+    });
 
     let fullResponse = '';
     let cardElement = null;
     let definitionElement = null;
-    let chunkCount = 0;
 
-    try {
-        for await (const chunk of stream) {
-            chunkCount++;
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                fullResponse += content;
+    for await (const content of stream) {
+        fullResponse += content;
 
-                if (chunkCount <= 3) {
-                    console.log(`[Context] Chunk ${chunkCount}: "${content}" (total so far: ${fullResponse.length} chars)`);
-                }
-
-                // Check early if the LLM says nothing notable
-                if (isNothingNotable(fullResponse)) {
-                    console.log('[Context] Detected NOTHING_NOTABLE during streaming');
-                    if (cardElement) cardElement.remove();
-                    showNothingNotableCard();
-                    return;
-                }
-
-                // Don't create a card until we're sure it's real content
-                if (fullResponse.length < 20) continue;
-
-                // Create the card on first substantial content
-                if (!cardElement) {
-                    console.log('[Context] Creating context card');
-                    const result = createContextCard(fullResponse);
-                    cardElement = result.card;
-                    definitionElement = result.definition;
-                } else {
-                    definitionElement.innerHTML = formatContextResponse(fullResponse) + '<span class="streaming-cursor"></span>';
-                }
-            }
+        if (isNothingNotable(fullResponse)) {
+            if (cardElement) cardElement.remove();
+            showNothingNotableCard();
+            return;
         }
-    } catch (err) {
-        console.error(`[Context] Stream reading failed after ${chunkCount} chunks:`, err);
-        throw err;
+
+        if (fullResponse.length < 20) continue;
+
+        if (!cardElement) {
+            const result = createContextCard(fullResponse);
+            cardElement = result.card;
+            definitionElement = result.definition;
+        } else {
+            definitionElement.innerHTML = formatContextResponse(fullResponse) + '<span class="streaming-cursor"></span>';
+        }
     }
 
-    console.log(`[Context] Stream complete — ${chunkCount} chunks, ${fullResponse.length} chars`);
-    console.log(`[Context] Full response: "${fullResponse.substring(0, 200)}..."`);
-
-    // Final update — remove cursor
     if (isNothingNotable(fullResponse)) {
-        console.log('[Context] Final check: NOTHING_NOTABLE');
         if (cardElement) cardElement.remove();
         showNothingNotableCard();
     } else if (definitionElement) {
-        console.log('[Context] Final update: rendering complete response');
         definitionElement.innerHTML = formatContextResponse(fullResponse);
-
         const topicMatches = fullResponse.match(/\*\*(.+?)\*\*/g);
         if (topicMatches) {
             topicMatches.forEach(t => {
@@ -1388,11 +1385,9 @@ Important rules:
             });
         }
     } else if (fullResponse.trim().length > 0) {
-        console.log('[Context] Short response — creating card now');
         const result = createContextCard(fullResponse);
         result.definition.innerHTML = formatContextResponse(fullResponse);
     } else {
-        console.log('[Context] Empty response');
         showNothingNotableCard();
     }
 }
@@ -1436,7 +1431,6 @@ function createContextCard(initialContent) {
 
     const definitionEl = card.querySelector('.definition');
 
-    // Insert at top of feed
     hideEmptyState();
     if (elements.detectionFeed.firstChild) {
         elements.detectionFeed.insertBefore(card, elements.detectionFeed.firstChild);
@@ -1451,11 +1445,8 @@ function createContextCard(initialContent) {
 }
 
 function formatContextResponse(text) {
-    // Convert **bold** to <strong>
     let formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Convert bullet points
     formatted = formatted.replace(/^• /gm, '<span style="margin-right:4px;">•</span>');
-    // Convert newlines to breaks
     formatted = formatted.replace(/\n/g, '<br>');
     return formatted;
 }
@@ -1464,15 +1455,14 @@ function formatContextResponse(text) {
 // Interview Mode - Resume Upload
 // ============================================
 
-let pdfjsLib = null; // Lazy-loaded PDF.js library
+let pdfjsLib = null;
 
 async function loadPdfJs() {
     if (pdfjsLib) return pdfjsLib;
     try {
-        const module = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/+esm');
+        const module = await import(chrome.runtime.getURL('lib/pdf.min.mjs'));
         pdfjsLib = module;
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
-        console.log('[Resume] PDF.js loaded successfully');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('lib/pdf.worker.min.mjs');
         return pdfjsLib;
     } catch (err) {
         console.error('[Resume] Failed to load PDF.js:', err);
@@ -1510,7 +1500,6 @@ async function handleResumeUpload(file) {
     const fileName = file.name;
     const ext = fileName.split('.').pop().toLowerCase();
 
-    // Update UI to show extracting state
     elements.interviewResumeStatus.textContent = 'Extracting...';
     elements.interviewResumeStatus.classList.add('extracting');
     elements.interviewResumeBtn.classList.add('has-file');
@@ -1529,15 +1518,12 @@ async function handleResumeUpload(file) {
             throw new Error('Could not extract meaningful text from the file');
         }
 
-        // Store in state
         state.interviewResumeText = text;
         state.interviewResumeFileName = fileName;
 
-        // Persist in sessionStorage
         sessionStorage.setItem('popupvideo_resume_text', text);
         sessionStorage.setItem('popupvideo_resume_name', fileName);
 
-        // Update UI
         const charCount = text.length;
         const displayName = fileName.length > 18 ? fileName.substring(0, 15) + '...' : fileName;
         elements.interviewResumeBtn.querySelector('.resume-btn-text').textContent = displayName;
@@ -1545,9 +1531,6 @@ async function handleResumeUpload(file) {
         elements.interviewResumeStatus.classList.remove('extracting');
         elements.interviewResumeClear.hidden = false;
 
-        console.log(`[Resume] Extracted ${charCount} chars from "${fileName}"`);
-
-        // Generate starter questions from the resume
         generateResumeQuestions();
 
     } catch (err) {
@@ -1556,7 +1539,6 @@ async function handleResumeUpload(file) {
         elements.interviewResumeStatus.classList.remove('extracting');
         elements.interviewResumeBtn.classList.remove('has-file');
 
-        // Clear state on failure
         state.interviewResumeText = '';
         state.interviewResumeFileName = '';
         sessionStorage.removeItem('popupvideo_resume_text');
@@ -1576,8 +1558,6 @@ function clearResume() {
     elements.interviewResumeStatus.textContent = '';
     elements.interviewResumeStatus.classList.remove('extracting');
     elements.interviewResume.value = '';
-
-    console.log('[Resume] Cleared');
 }
 
 function restoreResumeFromSession() {
@@ -1592,16 +1572,10 @@ function restoreResumeFromSession() {
         elements.interviewResumeBtn.classList.add('has-file');
         elements.interviewResumeClear.hidden = false;
         elements.interviewResumeStatus.textContent = `${(savedText.length / 1000).toFixed(1)}k chars`;
-
-        console.log(`[Resume] Restored "${savedName}" from session (${savedText.length} chars)`);
     }
 }
 
 async function generateResumeQuestions() {
-    if (!state.openaiClient) {
-        console.error('[Resume] OpenAI client not initialized — skipping starter questions');
-        return;
-    }
     if (!state.interviewResumeText) return;
 
     const role = state.interviewRole.trim() || 'the open position';
@@ -1609,7 +1583,6 @@ async function generateResumeQuestions() {
     const focusLabels = { general: 'General', behavioral: 'Behavioral', technical: 'Technical', culture: 'Culture Fit' };
     const focusLabel = focusLabels[focus] || 'General';
 
-    // Truncate resume to ~4000 chars to stay within token limits
     const resumeSnippet = state.interviewResumeText.substring(0, 4000);
 
     const systemPrompt = `You are an expert interview coach helping an HR recruiter prepare for an interview. Based on the candidate's resume provided below, generate 3-5 insightful questions the recruiter should ask during the interview for ${role}.
@@ -1621,7 +1594,7 @@ Guidelines:
 - Highlight impressive claims or achievements that deserve deeper probing
 - Note skills or technologies mentioned that should be validated
 - Spot patterns (e.g., short tenures, role changes) worth understanding
-- Frame questions conversationally — these should feel natural in an interview
+- Frame questions conversationally
 - If the focus is behavioral, ask about specific past experiences on their resume
 - If the focus is technical, probe specific technologies or projects they listed
 
@@ -1633,52 +1606,41 @@ Why: [One brief sentence explaining why this question is valuable]
 **Q: [Second question]**
 Why: [Brief rationale]`;
 
-    const userContent = `Here is the candidate's resume:\n\n${resumeSnippet}`;
-
-    // Show a loading card
     const loader = showInterviewLoading();
-    // Override loader text to indicate resume analysis
     const loaderAbbr = loader.querySelector('.abbreviation');
     if (loaderAbbr) loaderAbbr.textContent = '📄 Analyzing resume...';
 
     try {
-        const stream = await state.openaiClient.chat.completions.create({
+        const stream = streamChatCompletion({
             model: 'gpt-4o',
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: userContent }
+                { role: 'user', content: `Here is the candidate's resume:\n\n${resumeSnippet}` }
             ],
             temperature: 0.7,
-            max_tokens: 800,
-            stream: true
+            max_tokens: 800
         });
 
         let fullResponse = '';
         let card = null;
 
-        for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (!content) continue;
+        for await (const content of stream) {
             fullResponse += content;
 
             if (!card) {
-                // Remove loader and create the card
                 removeContextLoading(loader);
                 card = createResumeQuestionCard(fullResponse);
             } else {
-                // Update card content while streaming
                 card.definition.innerHTML = formatInterviewResponse(fullResponse) + '<span class="streaming-cursor"></span>';
             }
         }
 
-        // Final render without cursor
         if (card) {
             card.definition.innerHTML = formatInterviewResponse(fullResponse);
         } else {
             removeContextLoading(loader);
         }
 
-        // Track these questions to avoid repeating them later
         const questionMatches = fullResponse.match(/\*\*Q:\s*(.+?)\*\*/g);
         if (questionMatches) {
             questionMatches.forEach(q => {
@@ -1686,8 +1648,6 @@ Why: [Brief rationale]`;
                 state.interviewSuggestedQuestions.add(cleaned);
             });
         }
-
-        console.log('[Resume] Starter questions generated successfully');
     } catch (err) {
         console.error('[Resume] Failed to generate starter questions:', err);
         removeContextLoading(loader);
@@ -1729,36 +1689,29 @@ function createResumeQuestionCard(initialContent) {
 // Interview Mode - LLM Integration
 // ============================================
 
-const INTERVIEW_INTERVAL_MS = 12000; // 12 seconds
-const INTERVIEW_HISTORY_MAX_CHUNKS = 6; // Keep last ~72s of conversation
+const INTERVIEW_INTERVAL_MS = 12000;
+const INTERVIEW_HISTORY_MAX_CHUNKS = 6;
 
 function startInterviewTimer() {
     if (state.interviewTimer) return;
     state.interviewTimer = setInterval(() => {
-        if (state.mode === 'interview' && state.isListening && !state.interviewCallInProgress) {
+        if (state.mode === 'interview' && (state.isListening || state.tabCaptureActive) && !state.interviewCallInProgress) {
             processInterviewBuffer();
         }
     }, INTERVIEW_INTERVAL_MS);
-    console.log('[Interview] Timer started');
 }
 
 function stopInterviewTimer() {
     if (state.interviewTimer) {
         clearInterval(state.interviewTimer);
         state.interviewTimer = null;
-        console.log('[Interview] Timer stopped');
     }
 }
 
 async function processInterviewBuffer() {
     const buffer = state.transcriptBuffer.trim();
-    console.log(`[Interview] Buffer check — length: ${buffer.length}, min: ${MIN_BUFFER_LENGTH}`);
-    if (buffer.length < MIN_BUFFER_LENGTH) {
-        console.log('[Interview] Buffer too short, skipping');
-        return;
-    }
+    if (buffer.length < MIN_BUFFER_LENGTH) return;
 
-    // Add to rolling history and clear current buffer
     state.interviewTranscriptHistory.push(buffer);
     if (state.interviewTranscriptHistory.length > INTERVIEW_HISTORY_MAX_CHUNKS) {
         state.interviewTranscriptHistory.shift();
@@ -1770,13 +1723,12 @@ async function processInterviewBuffer() {
 
     try {
         await callLLMForInterview();
-        console.log('[Interview] LLM call completed successfully');
     } catch (err) {
-        console.error('[Interview] LLM call FAILED:', err);
+        console.error('[Interview] LLM call failed:', err);
         showInterviewNothingCard();
     } finally {
         state.interviewCallInProgress = false;
-        removeContextLoading(loader); // Reuse the same removal animation
+        removeContextLoading(loader);
     }
 }
 
@@ -1826,7 +1778,6 @@ function showInterviewNothingCard() {
 
 function buildResumeContext() {
     if (!state.interviewResumeText) return '';
-    // Truncate to ~3000 chars to keep the prompt reasonable
     const snippet = state.interviewResumeText.substring(0, 3000);
     return `\n\nThe candidate's resume/CV is provided below for additional context. Use it to:
 - Reference specific experiences or skills they listed
@@ -1856,7 +1807,7 @@ function buildInterviewSystemPrompt() {
             focusGuidance = `Focus on technical depth. When the candidate mentions technologies, tools, or approaches, suggest questions that probe their actual understanding — ask about trade-offs, debugging experiences, architecture decisions, and edge cases they've encountered.`;
             break;
         case 'culture':
-            focusGuidance = `Focus on culture fit and values alignment. Probe how they collaborate, handle disagreements, approach learning, deal with ambiguity, and what kind of work environment they thrive in. Ask about their motivations and what they value in a team.`;
+            focusGuidance = `Focus on culture fit and values alignment. Probe how they collaborate, handle disagreements, approach learning, deal with ambiguity, and what kind of work environment they thrive in.`;
             break;
         default:
             focusGuidance = `Provide a balanced mix of behavioral, technical, and culture-fit follow-up questions based on what's most relevant to what the candidate just said.`;
@@ -1867,40 +1818,32 @@ function buildInterviewSystemPrompt() {
 ${focusGuidance}
 
 Guidelines for generating questions:
-- Base every question on something the candidate ACTUALLY said — reference their specific words, claims, or experiences
+- Base every question on something the candidate ACTUALLY said
 - If the candidate gave a vague or surface-level answer, suggest a probing question to get specifics
 - If the candidate mentioned an achievement, suggest a question that digs into their specific contribution
 - If the candidate mentioned a challenge, ask what they learned or what they'd do differently
-- If the candidate made a claim (e.g., "I'm great at X"), suggest a question that asks for a concrete example
-- Flag any potential red flags worth exploring (e.g., blaming others, inconsistencies, avoiding specifics)
+- If the candidate made a claim, suggest a question that asks for a concrete example
+- Flag any potential red flags worth exploring
 
 Format your response EXACTLY as follows:
 
 **Q: [The suggested follow-up question]**
-Why: [One brief sentence explaining why this question is valuable — what it reveals]
+Why: [One brief sentence explaining why this question is valuable]
 
 **Q: [Second question]**
 Why: [Brief rationale]
 
-If the conversation snippet doesn't contain enough substance for meaningful follow-ups (e.g., just small talk or greetings), respond with exactly: NOTHING_NOTABLE
+If the conversation snippet doesn't contain enough substance for meaningful follow-ups, respond with exactly: NOTHING_NOTABLE
 
 Important:
 - Maximum 3 questions per response
-- Questions should be conversational, not interrogative — the recruiter needs to ask them naturally
-- Each question should target something different (don't ask variations of the same thing)
-- Keep "Why" explanations to one sentence${previousQuestions}${buildResumeContext()}`;
+- Questions should be conversational, not interrogative
+- Each question should target something different${previousQuestions}${buildResumeContext()}`;
 }
 
 async function callLLMForInterview() {
-    if (!state.openaiClient) {
-        console.error('[Interview] OpenAI client not initialized!');
-        throw new Error('OpenAI client not ready');
-    }
-
     const fullTranscript = state.interviewTranscriptHistory.join(' ');
     const recentChunk = state.interviewTranscriptHistory[state.interviewTranscriptHistory.length - 1] || '';
-
-    console.log(`[Interview] Sending to LLM — history: ${fullTranscript.length} chars, latest: ${recentChunk.length} chars`);
 
     const systemPrompt = buildInterviewSystemPrompt();
 
@@ -1913,58 +1856,36 @@ async function callLLMForInterview() {
         { role: 'user', content: userContent }
     ];
 
-    let stream;
-    try {
-        stream = await state.openaiClient.chat.completions.create({
-            model: 'gpt-4o',
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 600,
-            stream: true
-        });
-        console.log('[Interview] Stream created successfully');
-    } catch (err) {
-        console.error('[Interview] Failed to create stream:', err);
-        throw err;
-    }
+    const stream = streamChatCompletion({
+        model: 'gpt-4o',
+        messages,
+        temperature: 0.7,
+        max_tokens: 600
+    });
 
     let fullResponse = '';
     let cardElement = null;
     let definitionElement = null;
-    let chunkCount = 0;
 
-    try {
-        for await (const chunk of stream) {
-            chunkCount++;
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                fullResponse += content;
+    for await (const content of stream) {
+        fullResponse += content;
 
-                if (isNothingNotable(fullResponse)) {
-                    console.log('[Interview] Detected NOTHING_NOTABLE during streaming');
-                    if (cardElement) cardElement.remove();
-                    showInterviewNothingCard();
-                    return;
-                }
-
-                if (fullResponse.length < 15) continue;
-
-                if (!cardElement) {
-                    console.log('[Interview] Creating interview card');
-                    const result = createInterviewCard(fullResponse);
-                    cardElement = result.card;
-                    definitionElement = result.definition;
-                } else {
-                    definitionElement.innerHTML = formatInterviewResponse(fullResponse) + '<span class="streaming-cursor"></span>';
-                }
-            }
+        if (isNothingNotable(fullResponse)) {
+            if (cardElement) cardElement.remove();
+            showInterviewNothingCard();
+            return;
         }
-    } catch (err) {
-        console.error(`[Interview] Stream reading failed after ${chunkCount} chunks:`, err);
-        throw err;
-    }
 
-    console.log(`[Interview] Stream complete — ${chunkCount} chunks, ${fullResponse.length} chars`);
+        if (fullResponse.length < 15) continue;
+
+        if (!cardElement) {
+            const result = createInterviewCard(fullResponse);
+            cardElement = result.card;
+            definitionElement = result.definition;
+        } else {
+            definitionElement.innerHTML = formatInterviewResponse(fullResponse) + '<span class="streaming-cursor"></span>';
+        }
+    }
 
     if (isNothingNotable(fullResponse)) {
         if (cardElement) cardElement.remove();
@@ -1972,7 +1893,6 @@ async function callLLMForInterview() {
     } else if (definitionElement) {
         definitionElement.innerHTML = formatInterviewResponse(fullResponse);
 
-        // Track suggested questions to avoid repeats
         const questionMatches = fullResponse.match(/\*\*Q:\s*(.+?)\*\*/g);
         if (questionMatches) {
             questionMatches.forEach(q => {
@@ -2023,143 +1943,105 @@ function createInterviewCard(initialContent) {
 
 function formatInterviewResponse(text) {
     let formatted = text;
-
-    // Convert **Q: question** to styled question blocks
     formatted = formatted.replace(/\*\*Q:\s*(.+?)\*\*/g, '<span class="interview-question">$1</span>');
-
-    // Convert Why: rationale lines
     formatted = formatted.replace(/^Why:\s*(.+)$/gm, '<span class="interview-rationale">$1</span>');
-
-    // Convert any remaining **bold**
     formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-    // Convert newlines to breaks
     formatted = formatted.replace(/\n/g, '<br>');
-
     return formatted;
 }
 
 // ============================================
-// Quick API Integration
+// Microphone Permission & Speech Recognition
 // ============================================
 
-async function initQuickAPI() {
-    try {
-        if (typeof Quick !== 'undefined' && Quick.identity) {
-            const identity = await Quick.identity();
-            if (identity && identity.name) {
-                const firstName = identity.name.split(' ')[0];
-                state.userName = firstName;
+async function ensureMicPermission() {
+    const micPermission = await navigator.permissions.query({ name: 'microphone' });
+
+    if (micPermission.state === 'granted') {
+        return true;
+    }
+
+    chrome.tabs.create({ url: 'requestPermissions.html' });
+
+    return new Promise((resolve) => {
+        const intervalId = setInterval(async () => {
+            const perm = await navigator.permissions.query({ name: 'microphone' });
+            if (perm.state === 'granted') {
+                clearInterval(intervalId);
+                resolve(true);
             }
-        }
-    } catch (error) {
-        console.log('Quick API not available');
-    }
-}
-
-// ============================================
-// Speech Recognition Setup
-// ============================================
-
-function checkSpeechRecognitionSupport() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-        showError('Your browser doesn\'t support the Web Speech API. Please use Google Chrome or Microsoft Edge for the best experience.');
-        updateStatus('Browser not supported', 'error');
-        return false;
-    }
-    
-    return true;
+        }, 200);
+    });
 }
 
 function initSpeechRecognition() {
-    if (!checkSpeechRecognitionSupport()) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        showError('Your browser doesn\'t support the Web Speech API. Please use Google Chrome or Microsoft Edge.');
+        updateStatus('Browser not supported', 'error');
         return;
     }
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     state.recognition = new SpeechRecognition();
-    
     state.recognition.continuous = true;
     state.recognition.interimResults = true;
     state.recognition.lang = 'en-US';
     state.recognition.maxAlternatives = 1;
-    
-    state.recognition.onstart = handleRecognitionStart;
-    state.recognition.onend = handleRecognitionEnd;
-    state.recognition.onresult = handleRecognitionResult;
-    state.recognition.onerror = handleRecognitionError;
-    
-    elements.toggleBtn.disabled = false;
-    updateStatus('Ready', 'ready');
-}
 
-function handleRecognitionStart() {
-    state.isListening = true;
-    updateStatus('Listening...', 'listening');
-    updateToggleButton(true);
+    state.recognition.onstart = () => {
+        state.isListening = true;
+        updateListeningStatus();
+        updateToggleButton(true);
+    };
 
-    // Start context timer if in context mode
-    if (state.mode === 'context') {
-        startContextTimer();
-    }
-    // Start interview timer if in interview mode
-    if (state.mode === 'interview') {
-        startInterviewTimer();
-    }
-}
-
-function handleRecognitionEnd() {
-    if (state.isListening) {
-        try {
-            state.recognition.start();
-        } catch (e) {
-            // Recognition might already be started
-        }
-    } else {
-        updateStatus('Paused', 'paused');
-        updateToggleButton(false);
-    }
-}
-
-function handleRecognitionResult(event) {
-    const results = event.results;
-    
-    for (let i = event.resultIndex; i < results.length; i++) {
-        const transcript = results[i][0].transcript;
-        updateTranscriptPreview(transcript);
-        
-        if (results[i].isFinal) {
-            // Always accumulate transcript for context mode
-            state.transcriptBuffer += transcript + ' ';
-
-            // Only run jargon detection in jargon mode
-            if (state.mode === 'jargon') {
-                detectTerms(transcript);
+    state.recognition.onend = () => {
+        if (state.isListening) {
+            try { state.recognition.start(); } catch (e) { /* already started */ }
+        } else {
+            updateListeningStatus();
+            if (!state.tabCaptureActive) {
+                updateToggleButton(false);
             }
         }
-    }
-}
+    };
 
-function handleRecognitionError(event) {
-    console.error('Speech recognition error:', event.error);
-    
-    switch (event.error) {
-        case 'not-allowed':
-            showError('Microphone access was denied. Please click the camera/microphone icon in your browser\'s address bar and allow access, then refresh the page.');
-            state.isListening = false;
-            updateToggleButton(false);
-            updateStatus('Microphone denied', 'error');
-            break;
-        case 'no-speech':
-            break;
-        case 'network':
-            updateStatus('Network error', 'error');
-            break;
-        default:
-            updateStatus('Error occurred', 'error');
-    }
+    state.recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            updateTranscriptPreview(transcript);
+            if (event.results[i].isFinal) {
+                // Always accumulate transcript for context/interview modes
+                state.transcriptBuffer += transcript + ' ';
+                // Only run jargon detection in jargon mode
+                if (state.mode === 'jargon') {
+                    detectTerms(transcript);
+                }
+            }
+        }
+    };
+
+    state.recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        switch (event.error) {
+            case 'not-allowed':
+                showError('Microphone access was denied. Please try again.');
+                state.isListening = false;
+                updateToggleButton(false);
+                updateStatus('Microphone denied', 'error');
+                break;
+            case 'no-speech':
+                break;
+            case 'network':
+                updateStatus('Network error', 'error');
+                break;
+            default:
+                updateStatus('Error occurred', 'error');
+        }
+    };
+
+    elements.toggleBtn.disabled = false;
+    updateStatus('Ready', 'ready');
 }
 
 // ============================================
@@ -2170,26 +2052,25 @@ function detectTerms(transcript) {
     const words = transcript.toLowerCase();
     const now = Date.now();
     const DUPLICATE_THRESHOLD = Infinity; // Never show duplicate terms
-    
+
     for (const [lowerKey, data] of Object.entries(TERMS_LOWER)) {
-        // Skip if category not selected
         if (!state.selectedCategories.has(data.category)) {
             continue;
         }
-        
+
         const regex = new RegExp(`\\b${escapeRegex(lowerKey)}\\b`, 'i');
-        
+
         if (regex.test(words)) {
             const lastDetected = state.recentDetections.get(lowerKey);
             if (lastDetected && (now - lastDetected) < DUPLICATE_THRESHOLD) {
                 continue;
             }
-            
+
             addDetection(data.original, data.definition, data.category);
             state.recentDetections.set(lowerKey, now);
         }
     }
-    
+
     for (const [key, timestamp] of state.recentDetections) {
         if (now - timestamp > DUPLICATE_THRESHOLD) {
             state.recentDetections.delete(key);
@@ -2209,7 +2090,7 @@ function addDetection(term, definition, category) {
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const categoryInfo = CATEGORIES[category];
-    
+
     const detection = {
         id: Date.now(),
         term,
@@ -2219,11 +2100,10 @@ function addDetection(term, definition, category) {
         categoryName: categoryInfo?.name || category,
         timestamp
     };
-    
+
     state.detections.unshift(detection);
     state.totalDetections++;
-    
-    // No limit - keep all detections for the call duration
+
     renderDetection(detection);
     updateDetectionCount();
     hideEmptyState();
@@ -2241,7 +2121,7 @@ function renderDetection(detection) {
         <p class="definition">${escapeHtml(detection.definition)}</p>
     `;
 
-    // Add click handler to open detailed modal
+    // Click to open detailed AI explanation
     card.addEventListener('click', () => openTermModal(detection));
 
     if (elements.detectionFeed.firstChild) {
@@ -2267,7 +2147,7 @@ function clearAllDetections() {
             setTimeout(() => card.remove(), 300);
         }, index * 50);
     });
-    
+
     setTimeout(() => {
         state.detections = [];
         state.recentDetections.clear();
@@ -2318,7 +2198,7 @@ function updateToggleButton(isListening) {
 function updateTranscriptPreview(text) {
     elements.transcriptPreview.textContent = `"${text}"`;
     elements.transcriptPreview.classList.add('visible');
-    
+
     clearTimeout(state.transcriptTimeout);
     state.transcriptTimeout = setTimeout(() => {
         elements.transcriptPreview.classList.remove('visible');
@@ -2344,23 +2224,17 @@ function formatMarkdown(text) {
     if (!text) return '';
 
     let html = text;
-
-    // Escape HTML first (but we'll add our own tags)
     html = html
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-    // Convert **bold** to <strong>
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-    // Convert `code` to <code>
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Split into lines for list processing
     const lines = html.split('\n');
     let result = [];
-    let listStack = []; // Track nested list depth [{type: 'ul'/'ol', indent: 0}]
+    let listStack = [];
 
     function closeListsToLevel(targetIndent) {
         while (listStack.length > 0 && listStack[listStack.length - 1].indent >= targetIndent) {
@@ -2378,24 +2252,16 @@ function formatMarkdown(text) {
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i];
-
-        // Measure leading whitespace for indentation
         const leadingSpaces = line.match(/^(\s*)/)[1].length;
         const trimmedLine = line.trim();
 
-        // Check for numbered list (1. 2. 3.)
         const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.*)$/);
-        // Check for bullet list (- or *)
         const bulletMatch = trimmedLine.match(/^[-*]\s+(.*)$/);
 
         if (numberedMatch) {
             const content = numberedMatch[2];
             const currentIndent = leadingSpaces;
-
-            // Close deeper lists if we're at a shallower level
             closeListsToLevel(currentIndent + 1);
-
-            // Open new list if needed
             if (listStack.length === 0 || listStack[listStack.length - 1].indent < currentIndent) {
                 result.push('<ol>');
                 listStack.push({ type: 'ol', indent: currentIndent });
@@ -2404,31 +2270,20 @@ function formatMarkdown(text) {
         } else if (bulletMatch) {
             const content = bulletMatch[1];
             const currentIndent = leadingSpaces;
-
-            // Close deeper lists if we're at a shallower level
             closeListsToLevel(currentIndent + 1);
-
-            // Open new list if needed
             if (listStack.length === 0 || listStack[listStack.length - 1].indent < currentIndent) {
                 result.push('<ul>');
                 listStack.push({ type: 'ul', indent: currentIndent });
             }
             result.push(`<li>${content}</li>`);
         } else {
-            // Close all lists when we hit non-list content
-            if (trimmedLine !== '') {
-                closeAllLists();
-            }
-
-            // Handle headers (### or ## or lines ending with :)
+            if (trimmedLine !== '') closeAllLists();
             if (trimmedLine.match(/^#{1,3}\s+/)) {
                 const headerContent = trimmedLine.replace(/^#{1,3}\s+/, '');
                 result.push(`<h3>${headerContent}</h3>`);
             } else if (trimmedLine.match(/^.+:$/) && trimmedLine.length < 50) {
-                // Short lines ending in colon are likely headers
                 result.push(`<h3>${trimmedLine}</h3>`);
             } else if (trimmedLine === '') {
-                // Empty line - paragraph break
                 result.push('<br>');
             } else {
                 result.push(`<p>${trimmedLine}</p>`);
@@ -2436,9 +2291,7 @@ function formatMarkdown(text) {
         }
     }
 
-    // Close any remaining open lists
     closeAllLists();
-
     return result.join('');
 }
 
@@ -2446,40 +2299,18 @@ function formatMarkdown(text) {
 // Term Detail Modal
 // ============================================
 
-let openaiClient = null;
-
-async function initOpenAI() {
-    if (openaiClient) return openaiClient;
-
-    try {
-        console.log('Initializing OpenAI client...');
-        const OpenAI = (await import('https://cdn.jsdelivr.net/npm/openai/+esm')).default;
-        console.log('OpenAI module loaded successfully');
-        openaiClient = new OpenAI({
-            baseURL: `${window.location.origin}/api/ai`,
-            apiKey: 'not-needed',
-            dangerouslyAllowBrowser: true
-        });
-        console.log('OpenAI client created with baseURL:', `${window.location.origin}/api/ai`);
-        return openaiClient;
-    } catch (error) {
-        console.error('Failed to initialize OpenAI client:', error);
-        return null;
-    }
-}
+// Term modal uses streamChatCompletion() directly — no client needed
 
 function closeTermModal() {
     elements.termModal.hidden = true;
 }
 
 async function openTermModal(detection) {
-    // Show modal immediately with basic info
     elements.termModal.hidden = false;
     elements.termModalTerm.textContent = detection.term;
     elements.termModalCategory.textContent = `${detection.categoryIcon} ${detection.categoryName}`;
     elements.termModalBrief.textContent = detection.definition;
 
-    // Show loading state
     elements.termModalBody.innerHTML = `
         <div class="term-modal-loading">
             <div class="loading-spinner"></div>
@@ -2487,7 +2318,6 @@ async function openTermModal(detection) {
         </div>
     `;
 
-    // Build context-aware prompt based on category
     let contextPrompt = '';
     if (detection.category === 'leadership') {
         contextPrompt = `This is a person in Shopify's leadership. Provide:
@@ -2520,18 +2350,7 @@ Make it accessible but accurate.`;
     }
 
     try {
-        const client = await initOpenAI();
-        if (!client) {
-            console.error('OpenAI client failed to initialize');
-            elements.termModalBody.innerHTML = `
-                <p>Unable to load AI-powered explanations. Here's what we know:</p>
-                <p><strong>${escapeHtml(detection.term)}</strong>: ${escapeHtml(detection.definition)}</p>
-            `;
-            return;
-        }
-
-        console.log('Making API request for term:', detection.term);
-        const stream = await client.chat.completions.create({
+        const stream = streamChatCompletion({
             model: 'gpt-5.1',
             messages: [
                 {
@@ -2553,35 +2372,24 @@ Format rules:
 ${contextPrompt}`
                 }
             ],
-            temperature: 0.7,
-            stream: true
+            temperature: 0.7
         });
 
-        // Clear loading and stream response
         elements.termModalBody.innerHTML = '';
         let fullResponse = '';
 
-        for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                fullResponse += content;
-                elements.termModalBody.innerHTML = formatMarkdown(fullResponse);
-            }
+        for await (const content of stream) {
+            fullResponse += content;
+            elements.termModalBody.innerHTML = formatMarkdown(fullResponse);
         }
     } catch (error) {
         console.error('Failed to fetch AI explanation:', error);
-        console.error('Error details:', {
-            message: error.message,
-            status: error.status,
-            code: error.code,
-            type: error.type
-        });
         const errorMsg = error.message || 'Unknown error';
         elements.termModalBody.innerHTML = `
             <p style="color: var(--text-muted); margin-bottom: 1rem;">
                 Unable to generate detailed explanation.
                 ${errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('Failed')
-                    ? '<br><small>Make sure you\'re running via <code>quick serve</code>.</small>'
+                    ? '<br><small>Make sure you\'re logged into Quick (popup-video.quick.shopify.io).</small>'
                     : `<br><small>Error: ${escapeHtml(errorMsg)}</small>`}
             </p>
             <p><strong>${escapeHtml(detection.term)}</strong>: ${escapeHtml(detection.definition)}</p>
@@ -2590,7 +2398,7 @@ ${contextPrompt}`
 }
 
 // ============================================
-// Test Input Modal
+// Test Input
 // ============================================
 
 function openTestModal() {
@@ -2608,14 +2416,66 @@ function processTestInput() {
     const text = elements.testTextInput.value.trim();
     if (!text) return;
 
-    // Run term detection on the pasted text
     detectTerms(text);
-
-    // Update transcript preview to show what was processed
     updateTranscriptPreview(text.substring(0, 100) + (text.length > 100 ? '...' : ''));
-
-    // Close the modal
     closeTestModal();
+}
+
+// ============================================
+// Tab Capture Listener
+// ============================================
+
+function updateListeningStatus() {
+    const mic = state.isListening;
+    const tab = state.tabCaptureActive;
+
+    if (mic && tab) {
+        updateStatus('Listening... (mic + tab)', 'listening');
+    } else if (mic) {
+        const label = state.audioSource === 'mic' ? 'mic' : 'mic only';
+        updateStatus(`Listening... (${label})`, 'listening');
+    } else if (tab) {
+        const label = state.audioSource === 'tab' ? 'tab' : 'tab only';
+        updateStatus(`Listening... (${label})`, 'listening');
+    } else {
+        updateStatus('Paused', 'paused');
+    }
+}
+
+function initTabCaptureListener() {
+    chrome.runtime.onMessage.addListener((message) => {
+        switch (message.type) {
+            case 'tab-transcript':
+                if (message.text) {
+                    updateTranscriptPreview('[tab] ' + message.text);
+                    // Feed into transcript buffer for context/interview modes
+                    state.transcriptBuffer += message.text + ' ';
+                    // Only run jargon detection in jargon mode
+                    if (state.mode === 'jargon') {
+                        detectTerms(message.text);
+                    }
+                }
+                break;
+            case 'tab-capture-started':
+                console.log('[TabCapture] Received tab-capture-started');
+                state.tabCaptureActive = true;
+                updateListeningStatus();
+                break;
+            case 'tab-capture-stopped':
+                console.log('[TabCapture] Received tab-capture-stopped');
+                state.tabCaptureActive = false;
+                updateListeningStatus();
+                break;
+            case 'tab-capture-error':
+                console.error('[TabCapture] Received tab-capture-error:', message.error);
+                updateTranscriptPreview('[tab error] ' + message.error);
+                if (!message.error?.startsWith('Whisper API')) {
+                    state.tabCaptureActive = false;
+                    updateListeningStatus();
+                }
+                break;
+        }
+    });
 }
 
 // ============================================
@@ -2623,7 +2483,7 @@ function processTestInput() {
 // ============================================
 
 function toggleListening() {
-    if (state.isListening) {
+    if (state.isListening || state.tabCaptureActive) {
         stopListening();
     } else {
         startListening();
@@ -2631,37 +2491,70 @@ function toggleListening() {
 }
 
 async function startListening() {
-    if (!state.recognition) {
-        showError('Speech recognition is not available. Please use Google Chrome or Microsoft Edge.');
-        return;
-    }
-    
-    try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        state.isListening = true;
-        state.recognition.start();
-    } catch (error) {
-        console.error('Microphone error:', error);
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-            showError('Microphone access was denied. Please click the camera/microphone icon in your browser\'s address bar and allow access, then refresh the page.');
-        } else if (error.name === 'NotFoundError') {
-            showError('No microphone found. Please connect a microphone and refresh the page.');
-        } else if (error.name === 'NotReadableError') {
-            showError('Your microphone is busy or unavailable. Please close other apps using the microphone and try again.');
+    const useMic = state.audioSource === 'mic' || state.audioSource === 'both';
+    const useTab = state.audioSource === 'tab' || state.audioSource === 'both';
+
+    if (useMic) {
+        if (!state.recognition) {
+            showError('Speech recognition is not available. Please use Google Chrome.');
+            if (!useTab) return;
         } else {
-            showError('Failed to access microphone: ' + error.message);
+            await ensureMicPermission();
+            try {
+                state.isListening = true;
+                state.recognition.start();
+            } catch (error) {
+                console.error('Speech recognition start error:', error);
+                state.isListening = false;
+                if (!useTab) {
+                    updateStatus('Error', 'error');
+                    return;
+                }
+            }
         }
-        state.isListening = false;
-        updateStatus('Microphone error', 'error');
+    }
+
+    if (useTab) {
+        console.log('[TabCapture] Sending start-tab-capture to background...');
+        chrome.runtime.sendMessage({ type: 'start-tab-capture' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('[TabCapture] sendMessage error:', chrome.runtime.lastError.message);
+            } else {
+                console.log('[TabCapture] Background responded:', response);
+            }
+        });
+    }
+
+    // Start mode timers
+    if (state.mode === 'context') startContextTimer();
+    if (state.mode === 'interview') startInterviewTimer();
+
+    if (!useMic && useTab) {
+        updateToggleButton(true);
     }
 }
 
 function stopListening() {
-    state.isListening = false;
+    const useMic = state.audioSource === 'mic' || state.audioSource === 'both';
+    const useTab = state.audioSource === 'tab' || state.audioSource === 'both';
+
+    if (useMic) {
+        state.isListening = false;
+        if (state.recognition) {
+            state.recognition.stop();
+        }
+    }
+
+    if (useTab) {
+        chrome.runtime.sendMessage({ type: 'stop-tab-capture' });
+    }
+
     stopContextTimer();
     stopInterviewTimer();
-    if (state.recognition) {
-        state.recognition.stop();
+
+    if (!useMic) {
+        updateToggleButton(false);
+        updateListeningStatus();
     }
 }
 
@@ -2674,8 +2567,7 @@ function exportToPDF() {
         alert('No terms to export yet. Start listening to detect some terms first!');
         return;
     }
-    
-    // Group detections by category
+
     const grouped = {};
     state.detections.forEach(d => {
         if (!grouped[d.category]) {
@@ -2683,27 +2575,25 @@ function exportToPDF() {
         }
         grouped[d.category].push(d);
     });
-    
-    // Get current date/time for the report
+
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+    const dateStr = now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
     });
-    const timeStr = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+    const timeStr = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
     });
-    
-    // Build HTML content for PDF
+
     let termsHTML = '';
-    
+
     Object.keys(grouped).forEach(categoryId => {
         const category = CATEGORIES[categoryId];
         const terms = grouped[categoryId];
-        
+
         termsHTML += `
             <div class="category-section">
                 <h2>${category.icon} ${category.name}</h2>
@@ -2728,7 +2618,7 @@ function exportToPDF() {
             </div>
         `;
     });
-    
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -2736,117 +2626,26 @@ function exportToPDF() {
     <meta charset="UTF-8">
     <title>CONTXT - Terms Export</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.5;
-            color: #1a1a1a;
-            padding: 40px;
-            max-width: 900px;
-            margin: 0 auto;
+            line-height: 1.5; color: #1a1a1a; padding: 40px; max-width: 900px; margin: 0 auto;
         }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #1a1f3c;
-        }
-
-        .header h1 {
-            font-size: 28px;
-            color: #1a1f3c;
-            margin-bottom: 8px;
-        }
-        
-        .header .subtitle {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            margin-top: 15px;
-        }
-        
-        .stat {
-            text-align: center;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1a1f3c;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-            text-transform: uppercase;
-        }
-        
-        .category-section {
-            margin-bottom: 30px;
-        }
-        
-        .category-section h2 {
-            font-size: 18px;
-            color: #1a1a1a;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e1e3e5;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        
-        th {
-            text-align: left;
-            padding: 10px 12px;
-            background: #f6f6f7;
-            font-weight: 600;
-            color: #1a1a1a;
-            border-bottom: 2px solid #e1e3e5;
-        }
-        
-        td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e1e3e5;
-            vertical-align: top;
-        }
-        
-        tr:hover {
-            background: #fafafa;
-        }
-        
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e1e3e5;
-            text-align: center;
-            color: #666;
-            font-size: 12px;
-        }
-        
-        @media print {
-            body {
-                padding: 20px;
-            }
-            
-            .no-print {
-                display: none;
-            }
-        }
+        .header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #1a1f3c; }
+        .header h1 { font-size: 28px; color: #1a1f3c; margin-bottom: 8px; }
+        .header .subtitle { color: #666; font-size: 14px; }
+        .stats { display: flex; justify-content: center; gap: 30px; margin-top: 15px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 24px; font-weight: 700; color: #1a1f3c; }
+        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .category-section { margin-bottom: 30px; }
+        .category-section h2 { font-size: 18px; color: #1a1a1a; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e1e3e5; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; background: #f6f6f7; font-weight: 600; color: #1a1a1a; border-bottom: 2px solid #e1e3e5; }
+        td { padding: 10px 12px; border-bottom: 1px solid #e1e3e5; vertical-align: top; }
+        tr:hover { background: #fafafa; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e1e3e5; text-align: center; color: #666; font-size: 12px; }
+        @media print { body { padding: 20px; } .no-print { display: none; } }
     </style>
 </head>
 <body>
@@ -2864,24 +2663,20 @@ function exportToPDF() {
             </div>
         </div>
     </div>
-    
+
     ${termsHTML}
-    
+
     <div class="footer">
-        <p>Generated by CONTXT • contxt.quick.shopify.io</p>
+        <p>Generated by CONTXT</p>
     </div>
-    
+
     <script>
-        // Auto-trigger print dialog
-        window.onload = function() {
-            window.print();
-        };
+        window.onload = function() { window.print(); };
     </script>
 </body>
 </html>
     `;
-    
-    // Open in new window for printing/saving as PDF
+
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
@@ -2891,27 +2686,35 @@ function exportToPDF() {
 // Initialization
 // ============================================
 
+function connectToBackground() {
+    const port = chrome.runtime.connect({ name: 'sidepanel' });
+    port.onDisconnect.addListener(() => {
+        connectToBackground();
+    });
+}
+
 function init() {
-    // Load saved category preferences
+    // Port lifecycle for tab capture cleanup
+    connectToBackground();
+    window.addEventListener('beforeunload', () => {
+        chrome.runtime.sendMessage({ type: 'destroy-tab-capture' });
+    });
+
     loadSavedCategories();
-    
-    // Render category chips
     renderCategoryChips();
-    
-    // Initialize persona & mode system
+
+    // Persona & mode system
     initPersona();
     initModeToggle();
-    
-    // Initialize Quick API for user info
-    initQuickAPI();
-    
-    // Initialize speech recognition
+
+    // Audio sources
+    initAudioSourceSelector();
+
+    // Speech recognition & tab capture
     initSpeechRecognition();
-    
-    // Initialize OpenAI client for Live Context mode (async, non-blocking)
-    initOpenAIClient();
-    
-    // Set up event listeners
+    initTabCaptureListener();
+
+    // Event listeners
     elements.toggleBtn.addEventListener('click', toggleListening);
     elements.clearBtn.addEventListener('click', clearAllDetections);
     elements.exportBtn.addEventListener('click', exportToPDF);
@@ -2931,7 +2734,7 @@ function init() {
         elements.contextIndicator.classList.toggle('collapsed');
     });
 
-    // Term modal event listeners
+    // Term modal
     elements.termModalClose.addEventListener('click', closeTermModal);
     elements.termModalOverlay.addEventListener('click', closeTermModal);
     document.addEventListener('keydown', (e) => {
@@ -2949,33 +2752,27 @@ function init() {
         testToggleBtn.classList.toggle('active', !isVisible);
     });
 
-    // Test input - simulates speech for testing
+    // Test input form
     const testForm = document.getElementById('testInputForm');
     const testInput = document.getElementById('testInput');
     testForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const text = testInput.value.trim();
         if (!text) return;
-        
-        console.log(`[Test Input] Simulating speech: "${text}"`);
         updateTranscriptPreview(text);
-        
         if (state.mode === 'jargon') {
             detectTerms(text);
         } else if (state.mode === 'context') {
-            // In context mode, add to buffer and immediately process
             state.transcriptBuffer += text + ' ';
             processTranscriptBuffer();
         } else if (state.mode === 'interview') {
-            // In interview mode, add to buffer and immediately process
             state.transcriptBuffer += text + ' ';
             processInterviewBuffer();
         }
-        
         testInput.value = '';
     });
 
-    // Add shake animation CSS
+    // Shake animation CSS
     const style = document.createElement('style');
     style.textContent = `
         @keyframes shake {
@@ -2985,12 +2782,11 @@ function init() {
         }
     `;
     document.head.appendChild(style);
-    
-    console.log('CONTXT initialized!');
+
+    console.log('CONTXT (Chrome Extension) initialized!');
     console.log(`Loaded ${Object.keys(TERMS).length} terms across ${Object.keys(CATEGORIES).length} categories.`);
 }
 
-// Start the app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
